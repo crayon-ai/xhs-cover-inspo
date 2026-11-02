@@ -102,6 +102,79 @@ body {
 
 .stamp-badge__dot { display: none; }
 
+
+/* ——— Dark chrome: import + candidates (How We Feel / Craft Postcard) ——— */
+html.is-dark-chrome,
+html.is-dark-chrome body,
+html.is-import,
+html.is-import body,
+html.is-candidates,
+html.is-candidates body {
+  background: #0a0a0a;
+  color: #f5f5f5;
+}
+
+#app.is-dark-chrome,
+#app.is-import,
+#app.is-candidates {
+  background: #0a0a0a;
+  min-height: 100vh;
+}
+
+#app.is-dark-chrome .logo,
+#app.is-import .logo,
+#app.is-candidates .logo {
+  color: #ffffff;
+}
+
+#app.is-dark-chrome .stamp-badge--quiet,
+#app.is-dark-chrome .stamp-badge,
+#app.is-import .stamp-badge--quiet,
+#app.is-import .stamp-badge,
+#app.is-candidates .stamp-badge--quiet,
+#app.is-candidates .stamp-badge {
+  color: rgba(255, 255, 255, 0.38);
+}
+
+#app.is-dark-chrome .tabs,
+#app.is-import .tabs,
+#app.is-candidates .tabs {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+  background: rgba(10, 10, 10, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  margin-left: -20px;
+  margin-right: -20px;
+  padding-left: 20px;
+  padding-right: 20px;
+  width: calc(100% + 40px);
+  box-sizing: border-box;
+}
+
+#app.is-dark-chrome .tab,
+#app.is-import .tab,
+#app.is-candidates .tab {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+#app.is-dark-chrome .tab.is-active,
+#app.is-import .tab.is-active,
+#app.is-candidates .tab.is-active {
+  color: #ffffff;
+}
+
+#app.is-dark-chrome .tab.is-active::after,
+#app.is-import .tab.is-active::after,
+#app.is-candidates .tab.is-active::after {
+  background: #ffffff;
+}
+
+#app.is-dark-chrome .foot,
+#app.is-import .foot,
+#app.is-candidates .foot {
+  color: rgba(255, 255, 255, 0.28);
+}
+
 /* ——— Tabs · underline / near-black ——— */
 .tabs {
   display: grid;
@@ -297,20 +370,14 @@ body {
 .row-actions.single { grid-template-columns: 1fr; }
 .row-actions .btn { margin-top: 0; }
 
-/* ——— Import · ★B 柔光舞台 + 微堆 + Soft Breath · Stack22 慢渐变底 ——— */
+/* ——— Import · How We Feel Check in（黑底 + 彩虹环 + 白圆加号） ——— */
 #view-import {
   margin-left: -20px;
   margin-right: -20px;
   padding-left: 20px;
   padding-right: 20px;
   min-height: calc(100vh - 160px);
-  background:
-    radial-gradient(120% 90% at 0% 0%, #e6e4e9 0%, rgba(230,228,233,0) 55%),
-    radial-gradient(100% 80% at 100% 0%, #f1f2ed 0%, rgba(241,242,237,0) 50%),
-    radial-gradient(110% 90% at 0% 100%, #f1f0e6 0%, rgba(241,240,230,0) 55%),
-    radial-gradient(100% 85% at 100% 100%, #f5f6f2 0%, rgba(245,246,242,0) 50%),
-    radial-gradient(90% 70% at 50% 45%, #eef0e6 0%, rgba(238,240,230,0) 60%),
-    linear-gradient(165deg, #e6e4e9 0%, #edeeeb 28%, #eef0e6 55%, #f1f0e6 78%, #f5f6f2 100%);
+  background: #0a0a0a;
 }
 
 .import-stage {
@@ -332,14 +399,14 @@ body {
   align-items: center;
   justify-content: flex-start;
   min-height: 420px;
-  padding: 16vh 16px 56px;
+  padding: 14vh 16px 48px;
   margin: 0 -4px;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
   cursor: pointer;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.55);
   transition: transform 140ms var(--ease-out);
   -webkit-user-select: none;
   user-select: none;
@@ -356,33 +423,36 @@ body {
 
 .import-hit.is-hidden { display: none; }
 
-/* 径向柔光（半透明白，让 Stack22 渐变透出） */
+/* Soft rainbow bloom behind the ring */
 .import-glow {
   position: absolute;
   left: 50%;
-  top: calc(16vh + 120px);
-  width: min(92vw, 420px);
-  height: min(92vw, 420px);
+  top: calc(14vh + 132px);
+  width: min(88vw, 380px);
+  height: min(88vw, 380px);
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: radial-gradient(
-    ellipse at 50% 50%,
-    rgba(247, 246, 241, 0.55) 0%,
-    rgba(238, 240, 230, 0.18) 38%,
-    rgba(247, 246, 241, 0) 64%
+    circle at 50% 50%,
+    rgba(210, 150, 95, 0.10) 0%,
+    rgba(100, 170, 130, 0.07) 28%,
+    rgba(90, 140, 200, 0.06) 46%,
+    rgba(140, 110, 190, 0.05) 60%,
+    rgba(10, 10, 10, 0) 72%
   );
   pointer-events: none;
   z-index: 0;
+  filter: blur(12px);
+  opacity: 0.7;
 }
 
-
-/* Soft Breath Ripple · 2 圈极淡慢扩环（6–8s） */
+/* Soft Breath · rainbow-tinted expanding rings */
 .import-ripple {
   position: absolute;
   left: 50%;
-  top: calc(16vh + 120px);
-  width: 184px;
-  height: 184px;
+  top: calc(14vh + 132px);
+  width: 210px;
+  height: 210px;
   transform: translate(-50%, -50%);
   display: grid;
   place-items: center;
@@ -392,22 +462,26 @@ body {
 
 .import-ripple__ring {
   position: absolute;
-  width: 184px;
-  height: 184px;
+  width: 210px;
+  height: 210px;
   border-radius: 50%;
-  border: 1px solid rgba(39, 54, 47, 0.08);
+  border: 1px solid rgba(210, 170, 130, 0.12);
+  box-shadow:
+    0 0 14px rgba(100, 150, 200, 0.05),
+    inset 0 0 10px rgba(140, 120, 180, 0.04);
   box-sizing: border-box;
   animation: import-ripple-out 7s var(--ease-out) infinite;
 }
 
 .import-ripple__ring:nth-child(2) {
   animation-delay: -3.5s;
+  border-color: rgba(120, 160, 200, 0.10);
 }
 
 @keyframes import-ripple-out {
-  0%   { transform: scale(0.92); opacity: 0.32; }
-  70%  { opacity: 0.08; }
-  100% { transform: scale(1.28); opacity: 0; }
+  0%   { transform: scale(0.92); opacity: 0.28; }
+  70%  { opacity: 0.05; }
+  100% { transform: scale(1.32); opacity: 0; }
 }
 
 .import-stage.is-preview .import-ripple,
@@ -416,12 +490,16 @@ body {
   opacity: 0;
 }
 
-/* 舞台聚落：假封面 + 圆环共享中心 */
+.import-stage.is-preview .import-glow {
+  opacity: 0.2;
+}
+
+/* Cluster: dim micro-stack + rainbow ring */
 .import-cluster {
   position: relative;
   z-index: 1;
-  width: 220px;
-  height: 240px;
+  width: 240px;
+  height: 260px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -449,13 +527,14 @@ body {
   margin-left: -54px;
   margin-top: -72px;
   border-radius: 11px;
-  border: 1px solid rgba(39, 54, 47, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   background:
-    linear-gradient(165deg, #E8E7EB 0%, #ECEFEA 55%, #F0EFE6 100%);
-  box-shadow: 0 18px 40px rgba(39, 54, 47, 0.08);
+    linear-gradient(165deg, #2a2a2c 0%, #1c1c1e 55%, #141416 100%);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
   opacity: 0;
   animation: fake-card-in 520ms var(--ease-out) both;
   pointer-events: none;
+  filter: brightness(0.42) saturate(0.7);
 }
 
 .import-fake-card::after {
@@ -466,13 +545,12 @@ body {
   top: 12px;
   height: 42%;
   border-radius: 6px;
-  background: linear-gradient(180deg, #E2E4DE 0%, #ECEFEA 100%);
-  opacity: 0.85;
+  background: linear-gradient(180deg, #3a3a3e 0%, #262628 100%);
+  opacity: 0.7;
 }
 
-
 .import-fake-card--real {
-  background: #ECEFEA;
+  background: #1a1a1c;
 }
 
 .import-fake-card--real::after {
@@ -489,7 +567,9 @@ body {
   border-radius: inherit;
   pointer-events: none;
   object-fit: cover;
+  filter: brightness(0.5) saturate(0.75);
 }
+
 .import-fake-card--a {
   transform: translate(-38px, 6px) rotate(-6deg);
   animation-delay: 40ms;
@@ -498,84 +578,119 @@ body {
 
 .import-fake-card--b {
   transform: translate(36px, 2px) rotate(4deg);
-  background: linear-gradient(155deg, #E8E7EB 0%, #ECEFEA 48%, #F0EFE6 100%);
+  background: linear-gradient(155deg, #2c2c30 0%, #1a1a1c 48%, #121214 100%);
   animation-delay: 110ms;
   z-index: 2;
 }
 
 .import-fake-card--b::after {
-  background: linear-gradient(180deg, #DEDDE2 0%, #E8E7EB 100%);
+  background: linear-gradient(180deg, #3a3a40 0%, #26262a 100%);
   height: 36%;
 }
 
 .import-fake-card--c {
   transform: translate(-4px, -10px) rotate(-2deg);
-  background: linear-gradient(180deg, #ECEFEA 0%, #F0EFE6 100%);
+  background: linear-gradient(180deg, #262628 0%, #141416 100%);
   animation-delay: 180ms;
   z-index: 3;
-  box-shadow: 0 18px 40px rgba(39, 54, 47, 0.08);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
 }
 
 .import-fake-card--c::after {
   top: 14px;
   height: 48%;
-  background: linear-gradient(165deg, #E0E3DC 0%, #ECEFEA 100%);
+  background: linear-gradient(165deg, #343438 0%, #222224 100%);
 }
 
 @keyframes fake-card-in {
   from { opacity: 0; }
-  to { opacity: 1; }
+  to { opacity: 0.85; }
 }
 
-/* 柔光圆环 + 近黑圆钮 */
+/* Rainbow ring + white plus (How We Feel) */
 .import-ring {
   position: relative;
   z-index: 4;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 184px;
-  height: 184px;
+  width: 210px;
+  height: 210px;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(247, 246, 241, 0.92) 0%, rgba(247, 246, 241, 0.42) 42%, transparent 70%),
-    rgba(247, 246, 241, 0.72);
-  box-shadow:
-    0 0 0 1px rgba(39, 54, 47, 0.05),
-    0 18px 40px rgba(39, 54, 47, 0.08),
-    inset 0 0 0 1px rgba(247, 246, 241, 0.85);
-  transition: transform 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
+  background: transparent;
+  box-shadow: none;
+  transition: transform 140ms var(--ease-out);
   animation: ring-breathe 5.5s ease-in-out infinite;
   pointer-events: none;
 }
 
+.import-ring__bloom {
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from -40deg,
+    #c8885e,
+    #c9ae6a,
+    #6aab88,
+    #5a8fbf,
+    #8a78b8,
+    #b87898,
+    #c8885e
+  );
+  filter: blur(26px) saturate(0.7);
+  opacity: 0.28;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.import-ring__arc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from -40deg,
+    #c8885e 0deg,
+    #c9ae6a 60deg,
+    #6aab88 120deg,
+    #5a8fbf 180deg,
+    #8a78b8 240deg,
+    #b87898 300deg,
+    #c8885e 360deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 11px), #000 calc(100% - 10px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 11px), #000 calc(100% - 10px));
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.58;
+  filter: saturate(0.75) brightness(0.88);
+}
+
 @keyframes ring-breathe {
   0%, 100% {
-    box-shadow:
-      0 0 0 1px rgba(39, 54, 47, 0.05),
-      0 18px 40px rgba(39, 54, 47, 0.07),
-      inset 0 0 0 1px rgba(247, 246, 241, 0.85);
+    filter: brightness(1);
   }
   50% {
-    box-shadow:
-      0 0 0 1px rgba(39, 54, 47, 0.06),
-      0 22px 48px rgba(39, 54, 47, 0.10),
-      inset 0 0 0 1px rgba(247, 246, 241, 0.9);
+    filter: brightness(1.03);
   }
 }
 
 .import-hit__plus {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 68px;
-  height: 68px;
+  width: 72px;
+  height: 72px;
   border: 0;
   border-radius: 50%;
-  background: var(--ink);
-  box-shadow: 0 4px 16px rgba(39, 54, 47, 0.22);
-  color: #f7f6f1;
-  font-size: 34px;
+  background: #ffffff;
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.9);
+  color: #111111;
+  font-size: 36px;
   font-weight: 300;
   line-height: 1;
   letter-spacing: -0.04em;
@@ -584,6 +699,18 @@ body {
 }
 
 .import-hit__label {
+  display: block;
+  margin-top: 18px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.62);
+  text-align: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.import-stage.is-preview .import-hit__label {
   display: none;
 }
 
@@ -608,11 +735,11 @@ body {
 .import-preview__frame {
   width: 100%;
   max-width: 260px;
-  background: var(--card-solid);
+  background: #161616;
   border-radius: 14px;
   padding: 10px 10px 22px;
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
 }
 
 .import-preview__frame canvas,
@@ -620,7 +747,7 @@ body {
   width: 100%;
   display: block;
   border-radius: var(--radius-inner);
-  background: var(--bg-soft);
+  background: #0f0f0f;
   max-height: 420px;
   object-fit: contain;
 }
@@ -628,7 +755,7 @@ body {
 .import-preview__meta {
   margin: 0;
   font-size: 12px;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.45);
   font-weight: 400;
 }
 
@@ -642,6 +769,18 @@ body {
 
 .import-actions .btn { margin-top: 0; }
 
+/* Import CTA: white pill on black — not charcoal ink */
+#app.is-import .import-actions .btn.primary {
+  background: #ffffff;
+  color: #111111;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+#app.is-import .import-actions .btn.primary:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
 .import-actions .btn.primary {
   padding: 14px 18px;
   font-size: 15px;
@@ -653,7 +792,7 @@ body {
   cursor: pointer;
   border: 0 !important;
   background: transparent !important;
-  color: var(--muted) !important;
+  color: rgba(255, 255, 255, 0.45) !important;
   box-shadow: none !important;
   font-size: 13px !important;
   font-weight: 400 !important;
@@ -661,89 +800,178 @@ body {
   min-height: auto !important;
 }
 
-/* ——— Cover grid ——— */
-.grid.covers {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 12px;
+/* ——— Candidates: Craft Your Postcard tilt on near-black ——— */
+#view-candidates {
+  background: transparent;
+}
+
+#app.is-candidates .cand-panel.card,
+#app.is-candidates .cand-panel {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+#app.is-candidates .section-head h2 {
+  color: #ffffff;
+}
+
+#app.is-candidates .muted,
+#app.is-candidates .cand-pager {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+#app.is-candidates .btn.ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+#app.is-candidates .btn.ghost:disabled {
+  opacity: 0.35;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+#app.is-candidates .btn.primary {
+  background: rgba(255, 255, 255, 0.92);
+  color: #111111;
+  border-color: transparent;
+}
+
+#app.is-candidates .btn.primary:disabled {
+  opacity: 0.4;
+}
+
+.cand-panel {
+  padding-bottom: 8px;
+}
+
+.cand-toolbar {
+  margin-bottom: 4px;
+}
+
+.cand-stage {
+  position: relative;
+  margin: 8px -20px 0;
+  padding: 8px 0 4px;
+  background: transparent;
+  perspective: 1100px;
+}
+
+.cand-rail {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  padding: 36px max(56px, 16vw) 48px;
+  scrollbar-width: none;
+  touch-action: pan-x;
+  perspective: 1100px;
+  transform-style: preserve-3d;
+}
+
+.cand-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.cand-rail.is-empty {
+  display: none;
 }
 
 .cover-card {
   position: relative;
+  flex: 0 0 min(236px, 60vw);
+  width: min(236px, 60vw);
   border: 0;
   background: transparent;
   padding: 0;
   font: inherit;
   cursor: pointer;
-  aspect-ratio: auto;
-  animation: card-in var(--dur) var(--ease-out) both;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  will-change: transform;
+  -webkit-user-select: none;
+  user-select: none;
+  opacity: 0.92;
 }
 
-.cover-card:nth-child(1) { animation-delay: 0ms; }
-.cover-card:nth-child(2) { animation-delay: 40ms; }
-.cover-card:nth-child(3) { animation-delay: 80ms; }
-.cover-card:nth-child(4) { animation-delay: 120ms; }
-.cover-card:nth-child(5) { animation-delay: 160ms; }
-.cover-card:nth-child(6) { animation-delay: 200ms; }
-.cover-card:nth-child(n+7) { animation-delay: 220ms; }
-
-@keyframes card-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+.cover-card.is-center {
+  opacity: 1;
+  z-index: 2;
 }
 
-.polaroid-frame {
+.cover-face {
   display: block;
-  background: var(--card-solid);
-  border-radius: 12px;
-  padding: 8px 8px 18px;
-  box-shadow: var(--shadow);
-  border: 1px solid var(--line);
-  transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
+  border-radius: 18px;
   overflow: hidden;
+  background: #1a1a1a;
+  box-shadow:
+    0 22px 48px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+  transition: box-shadow 180ms ease;
 }
 
-.polaroid-frame canvas,
-.polaroid-frame img {
+.cover-face canvas,
+.cover-face img {
   width: 100%;
   aspect-ratio: 3 / 4;
   object-fit: cover;
   display: block;
-  border-radius: var(--radius-inner);
-  background: var(--bg-soft);
+  background: #141414;
+  pointer-events: none;
 }
 
-.cover-card.is-selected .polaroid-frame {
-  transform: scale(1.02) rotate(-1.5deg);
-  box-shadow: var(--shadow-lift);
-  border-color: #D4D4D4;
-}
-
-.cover-card:nth-child(even).is-selected .polaroid-frame {
-  transform: scale(1.02) rotate(1.5deg);
+.cover-card.is-selected .cover-face {
+  box-shadow:
+    0 22px 48px rgba(0, 0, 0, 0.55),
+    0 0 0 2px rgba(255, 255, 255, 0.88);
 }
 
 .cover-card .badge {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 12px;
+  right: 12px;
   z-index: 2;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   display: none;
   align-items: center;
   justify-content: center;
-  background: var(--accent);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.95);
+  color: #111;
   font-size: 13px;
   font-weight: 700;
   border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(39, 54, 47, 0.2);
-  border: 2px solid #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  border: 0;
+  pointer-events: none;
 }
 
 .cover-card.is-selected .badge { display: inline-flex; }
+
+.cand-pager {
+  margin: 0 0 10px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.cand-pager.is-hidden { display: none; }
+
+/* legacy polaroid kept for note page only via .note-cover.polaroid */
+.polaroid-frame {
+  display: block;
+}
 
 /* ——— Note ——— */
 .note-cover.polaroid {
@@ -1032,12 +1260,12 @@ body {
   }
 
   .import-fake-card {
-    opacity: 1;
+    opacity: 0.85;
+    filter: brightness(0.42) saturate(0.7);
   }
 
-  .cover-card.is-selected .polaroid-frame,
-  .cover-card:nth-child(even).is-selected .polaroid-frame {
-    transform: scale(1.02);
+  .cover-card.is-selected .polaroid-frame {
+    transform: scale(1.01);
   }
 
   .btn.primary:active:not(:disabled),

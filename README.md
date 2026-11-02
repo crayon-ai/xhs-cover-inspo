@@ -4,6 +4,7 @@
 
 ## 怎么打开
 
+- 在线演示（GitHub Pages）：<https://crayon-ai.github.io/xhs-cover-inspo/>
 - 本地：用浏览器直接打开 `index.html`（无需构建，也无需本地服务器）。
 - 小红书：在 XHS WebView 中打开同一份静态页。
 

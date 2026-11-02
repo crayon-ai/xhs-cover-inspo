@@ -116,6 +116,23 @@
     qsAll('.tab').forEach(function (t) {
       t.classList.toggle('is-active', t.getAttribute('data-view') === name);
     });
+    var onImport = name === 'import';
+    var onCandidates = name === 'candidates';
+    var darkChrome = onImport || onCandidates;
+    var appRoot = document.getElementById('app');
+    if (appRoot) {
+      appRoot.classList.toggle('is-import', onImport);
+      appRoot.classList.toggle('is-candidates', onCandidates);
+      appRoot.classList.toggle('is-dark-chrome', darkChrome);
+    }
+    document.documentElement.classList.toggle('is-import', onImport);
+    document.documentElement.classList.toggle('is-candidates', onCandidates);
+    document.documentElement.classList.toggle('is-dark-chrome', darkChrome);
+    if (document.body) {
+      document.body.classList.toggle('is-import', onImport);
+      document.body.classList.toggle('is-candidates', onCandidates);
+      document.body.classList.toggle('is-dark-chrome', darkChrome);
+    }
   }
 
   function revokeUrls(list) {
@@ -370,35 +387,143 @@
     });
   }
 
+  var candidatesRailScrollBound = false;
+  var candidatesTiltRaf = 0;
+
+  function getCenteredSlideIndex() {
+    var rail = el.candidatesRail;
+    if (!rail) return 0;
+    var slides = rail.querySelectorAll('.cover-card');
+    if (!slides.length) return 0;
+    var mid = rail.getBoundingClientRect().left + rail.clientWidth / 2;
+    var best = 0;
+    var bestDist = Infinity;
+    for (var i = 0; i < slides.length; i++) {
+      var r = slides[i].getBoundingClientRect();
+      var c = (r.left + r.right) / 2;
+      var d = Math.abs(c - mid);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  function isSlideCentered(slide) {
+    var rail = el.candidatesRail;
+    if (!rail || !slide) return false;
+    var mid = rail.getBoundingClientRect().left + rail.clientWidth / 2;
+    var r = slide.getBoundingClientRect();
+    var c = (r.left + r.right) / 2;
+    return Math.abs(c - mid) < Math.max(36, r.width * 0.32);
+  }
+
+  /** Craft Your Postcard-style tilt: center slight Z, neighbors rotateY away */
+  function updateCandidateTilts() {
+    var rail = el.candidatesRail;
+    if (!rail) return;
+    var slides = rail.querySelectorAll('.cover-card');
+    if (!slides.length) return;
+    var mid = rail.getBoundingClientRect().left + rail.clientWidth / 2;
+    for (var i = 0; i < slides.length; i++) {
+      var slide = slides[i];
+      var r = slide.getBoundingClientRect();
+      var c = (r.left + r.right) / 2;
+      var o = (c - mid) / Math.max(1, r.width);
+      if (o > 1.35) o = 1.35;
+      if (o < -1.35) o = -1.35;
+      /* keep neighbor faces readable (Craft peek), not edge-on */
+      var rotY = o * -34;
+      var rotZ = 5.5 - o * 7;
+      var sc = 1 - Math.abs(o) * 0.06;
+      if (sc < 0.88) sc = 0.88;
+      var ty = Math.abs(o) * 8;
+      slide.style.transform =
+        'perspective(900px) translateY(' + ty + 'px) rotateY(' + rotY + 'deg) rotateZ(' + rotZ + 'deg) scale(' + sc + ')';
+      slide.classList.toggle('is-center', Math.abs(o) < 0.28);
+    }
+  }
+
+  function updateCandidatesPager() {
+    if (!el.candidatesPager) return;
+    var n = state.candidates.length;
+    if (!n) {
+      el.candidatesPager.classList.add('is-hidden');
+      el.candidatesPager.textContent = '';
+      return;
+    }
+    el.candidatesPager.classList.remove('is-hidden');
+    var idx = getCenteredSlideIndex();
+    el.candidatesPager.textContent = (idx + 1) + ' / ' + n;
+    updateCandidateTilts();
+  }
+
+  function onCandidatesRailScroll() {
+    if (candidatesTiltRaf) return;
+    if (window.requestAnimationFrame) {
+      candidatesTiltRaf = window.requestAnimationFrame(function () {
+        candidatesTiltRaf = 0;
+        updateCandidatesPager();
+      });
+    } else {
+      updateCandidatesPager();
+    }
+  }
+
   function renderCandidates() {
-    var grid = el.candidatesGrid;
-    grid.innerHTML = '';
+    var rail = el.candidatesRail;
+    rail.innerHTML = '';
     var n = state.candidates.length;
     el.candidatesMeta.textContent = n
-      ? ('共切出 ' + n + ' 张候选（启发式双列 3:4）。点选喜欢的封面。')
+      ? ('共切出 ' + n + ' 张。左右滑切换，点中间卡选中。')
       : '先导入截图再切分。';
     el.btnSelectAll.disabled = !n;
     el.btnClearSel.disabled = !n;
+    rail.classList.toggle('is-empty', !n);
     updateSaveSelectedBtn();
+
+    if (!candidatesRailScrollBound && rail) {
+      rail.addEventListener('scroll', onCandidatesRailScroll, { passive: true });
+      candidatesRailScrollBound = true;
+    }
 
     state.candidates.forEach(function (c) {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'cover-card' + (state.selectedIds[c.id] ? ' is-selected' : '');
       btn.setAttribute('data-id', c.id);
-      var frame = document.createElement('span');
-      frame.className = 'polaroid-frame';
+      btn.setAttribute('aria-label', '候选封面');
+      var face = document.createElement('span');
+      face.className = 'cover-face';
       var canvas = document.createElement('canvas');
-      frame.appendChild(canvas);
+      face.appendChild(canvas);
       var badge = document.createElement('span');
       badge.className = 'badge';
       badge.setAttribute('aria-hidden', 'true');
       badge.textContent = '✓';
-      btn.appendChild(frame);
+      btn.appendChild(face);
       btn.appendChild(badge);
-      grid.appendChild(btn);
+      rail.appendChild(btn);
       paintBlobToCanvas(c.blob, canvas).catch(function () {});
+
+      var dragOriginX = 0;
+      var dragMoved = false;
+      btn.addEventListener('pointerdown', function (ev) {
+        dragOriginX = ev.clientX;
+        dragMoved = false;
+      });
+      btn.addEventListener('pointermove', function (ev) {
+        if (Math.abs(ev.clientX - dragOriginX) > 10) dragMoved = true;
+      });
       btn.addEventListener('click', function () {
+        if (dragMoved) return;
+        if (!isSlideCentered(btn)) {
+          if (btn.scrollIntoView) {
+            btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          }
+          return;
+        }
         if (state.selectedIds[c.id]) {
           delete state.selectedIds[c.id];
         } else {
@@ -408,6 +533,16 @@
         updateSaveSelectedBtn();
       });
     });
+
+    function afterLayout() {
+      rail.scrollLeft = 0;
+      updateCandidatesPager();
+    }
+    if (window.requestAnimationFrame) {
+      window.requestAnimationFrame(afterLayout);
+    } else {
+      afterLayout();
+    }
   }
 
   function updateSaveSelectedBtn() {
@@ -795,7 +930,8 @@
     el.importActions = $('import-actions');
     el.btnSlice = $('btn-slice');
     el.fileInput = $('file-input');
-    el.candidatesGrid = $('candidates-grid');
+    el.candidatesRail = $('candidates-rail');
+    el.candidatesPager = $('candidates-pager');
     el.candidatesMeta = $('candidates-meta');
     el.btnSelectAll = $('btn-select-all');
     el.btnClearSel = $('btn-clear-sel');

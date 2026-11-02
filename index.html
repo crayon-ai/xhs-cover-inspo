@@ -38,10 +38,13 @@
                 <span class="import-fake-card import-fake-card--b"></span>
                 <span class="import-fake-card import-fake-card--c"></span>
               </span>
-              <span class="import-ring">
+              <span class="import-ring" aria-hidden="true">
+                <span class="import-ring__bloom"></span>
+                <span class="import-ring__arc"></span>
                 <span class="import-hit__plus">+</span>
               </span>
             </span>
+            <span class="import-hit__label">导入</span>
           </label>
           <input id="file-input" type="file" accept="image/*" multiple hidden />
           <div id="import-preview" class="import-preview is-hidden" aria-live="polite"></div>
@@ -54,16 +57,19 @@
 
       <!-- 候选 -->
       <section id="view-candidates" class="view">
-        <div class="card soft enter">
+        <div class="cand-panel enter">
           <div class="section-head">
             <h2>封面候选</h2>
           </div>
           <p class="muted" id="candidates-meta">先导入截图再切分。</p>
-          <div class="row-actions">
+          <div class="row-actions cand-toolbar">
             <button type="button" id="btn-select-all" class="btn ghost" disabled>全选</button>
             <button type="button" id="btn-clear-sel" class="btn ghost" disabled>清空选择</button>
           </div>
-          <div id="candidates-grid" class="grid covers"></div>
+          <div class="cand-stage" id="candidates-stage">
+            <div id="candidates-rail" class="cand-rail" aria-label="封面候选轮播"></div>
+          </div>
+          <p id="candidates-pager" class="cand-pager is-hidden" aria-live="polite"></p>
           <button type="button" id="btn-save-selected" class="btn primary" disabled>为所选填写笔记</button>
         </div>
       </section>
