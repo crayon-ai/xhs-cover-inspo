@@ -498,8 +498,8 @@ html.is-candidates body {
 .import-cluster {
   position: relative;
   z-index: 1;
-  width: 240px;
-  height: 260px;
+  width: 288px;
+  height: 312px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -510,8 +510,8 @@ html.is-candidates body {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 148px;
-  height: 196px;
+  width: 184px;
+  height: 244px;
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 1;
@@ -522,19 +522,19 @@ html.is-candidates body {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 108px;
+  width: 138px;
   aspect-ratio: 3 / 4;
-  margin-left: -54px;
-  margin-top: -72px;
-  border-radius: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin-left: -69px;
+  margin-top: -92px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   background:
     linear-gradient(165deg, #2a2a2c 0%, #1c1c1e 55%, #141416 100%);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.45);
   opacity: 0;
   animation: fake-card-in 520ms var(--ease-out) both;
   pointer-events: none;
-  filter: brightness(0.42) saturate(0.7);
+  filter: brightness(0.72) saturate(0.85);
 }
 
 .import-fake-card::after {
@@ -567,19 +567,23 @@ html.is-candidates body {
   border-radius: inherit;
   pointer-events: none;
   object-fit: cover;
-  filter: brightness(0.5) saturate(0.75);
+  filter: brightness(0.8) saturate(0.9);
 }
 
 .import-fake-card--a {
-  transform: translate(-38px, 6px) rotate(-6deg);
-  animation-delay: 40ms;
+  transform: translate(-48px, 8px) rotate(-7deg);
+  animation:
+    fake-card-in 520ms var(--ease-out) 40ms both,
+    fake-card-float-a 7.3s ease-in-out -2.1s infinite;
   z-index: 1;
 }
 
 .import-fake-card--b {
-  transform: translate(36px, 2px) rotate(4deg);
+  transform: translate(46px, 3px) rotate(5deg);
   background: linear-gradient(155deg, #2c2c30 0%, #1a1a1c 48%, #121214 100%);
-  animation-delay: 110ms;
+  animation:
+    fake-card-in 520ms var(--ease-out) 110ms both,
+    fake-card-float-b 8.6s ease-in-out -4.4s infinite;
   z-index: 2;
 }
 
@@ -589,11 +593,13 @@ html.is-candidates body {
 }
 
 .import-fake-card--c {
-  transform: translate(-4px, -10px) rotate(-2deg);
+  transform: translate(-4px, -13px) rotate(-2deg);
   background: linear-gradient(180deg, #262628 0%, #141416 100%);
-  animation-delay: 180ms;
+  animation:
+    fake-card-in 520ms var(--ease-out) 180ms both,
+    fake-card-float-c 9.8s ease-in-out -6.7s infinite;
   z-index: 3;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.5);
 }
 
 .import-fake-card--c::after {
@@ -604,7 +610,25 @@ html.is-candidates body {
 
 @keyframes fake-card-in {
   from { opacity: 0; }
-  to { opacity: 0.85; }
+  to { opacity: 0.9; }
+}
+
+/* Idle drift: slow, out-of-phase so the stack reads as floating covers.
+   0%/100% equal the card's resting transform; reduced-motion disables via
+   the existing blanket rule and cards hold their static transform. */
+@keyframes fake-card-float-a {
+  0%, 100% { transform: translate(-48px, 8px) rotate(-7deg); }
+  50%      { transform: translate(-52px, -3px) rotate(-8.4deg); }
+}
+
+@keyframes fake-card-float-b {
+  0%, 100% { transform: translate(46px, 3px) rotate(5deg); }
+  50%      { transform: translate(41px, -8px) rotate(3.6deg); }
+}
+
+@keyframes fake-card-float-c {
+  0%, 100% { transform: translate(-4px, -13px) rotate(-2deg); }
+  50%      { transform: translate(-7px, -21px) rotate(-3.2deg); }
 }
 
 /* Rainbow ring + white plus (How We Feel) */
@@ -1260,8 +1284,8 @@ html.is-candidates body {
   }
 
   .import-fake-card {
-    opacity: 0.85;
-    filter: brightness(0.42) saturate(0.7);
+    opacity: 0.9;
+    filter: brightness(0.72) saturate(0.85);
   }
 
   .cover-card.is-selected .polaroid-frame {

@@ -4,8 +4,10 @@
   var DB_NAME = 'xhs-cover-inspo';
   var DB_VERSION = 1;
   var STORE = 'inspirations';
-  var ASPECT = 4 / 3; // height / width for 3:4 cover (h = w * 4/3)
-  var COVER_RATIO = 3 / 4; // width / height
+  // Projection analysis tuning (validated on real feed screenshots)
+  var PROJ_STEP = 3;      // px stride when sampling projections
+  var WHITE_BRIGHT = 245; // pixel brightness >= this counts as "white"
+  var GAP_ROW = 0.02;     // row counts as near-empty below this non-white ratio
 
   var state = {
     view: 'import',
@@ -20,6 +22,9 @@
   };
 
   var el = {};
+
+  // Test hook: lets the regression driver inspect slicing output. No behavior change.
+  window.__xhs_state = state;
 
   function $(id) {
     return document.getElementById(id);
@@ -196,125 +201,165 @@
   }
 
   /**
-   * Heuristic: assume Xiaohongshu home feed double-column waterfall.
-   * - Side padding ~ 3–4% of width each
-   * - Column gap ~ 2–3% of width
-   * - Two equal columns
-   * - Each card ~ 3:4 (w:h)
-   * - Vertical gap similar to column gap
-   * - Top chrome (status + nav) often ~ 8–14% of height; bottom tab bar ~ 6–10%
-   * We use conservative insets and slide 3:4 tiles down each column.
+   * Grid detection via row/column projection (offline pixel analysis, no ML).
+   * Cover heights vary row by row and paddings differ per screenshot, so a
+   * fixed grid always drifts; projections measure the actual layout instead.
    */
-  function estimateLayout(imgW, imgH) {
-    var sidePad = Math.round(imgW * 0.035);
-    var gap = Math.max(8, Math.round(imgW * 0.022));
-    var usable = imgW - sidePad * 2 - gap;
-    var colW = Math.floor(usable / 2);
-    var cardH = Math.round(colW / COVER_RATIO); // 3:4 => h = w * 4/3
-    var topInset = Math.round(imgH * 0.1);
-    var bottomInset = Math.round(imgH * 0.08);
-    var vGap = Math.max(8, Math.round(gap * 1.1));
-    return {
-      sidePad: sidePad,
-      gap: gap,
-      colW: colW,
-      cardH: cardH,
-      topInset: topInset,
-      bottomInset: bottomInset,
-      vGap: vGap,
-      cols: [
-        sidePad,
-        sidePad + colW + gap
-      ]
-    };
+  function buildPixelData(bitmap, imgW, imgH) {
+    var canvas = document.createElement('canvas');
+    canvas.width = imgW;
+    canvas.height = imgH;
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(bitmap, 0, 0);
+    return ctx.getImageData(0, 0, imgW, imgH).data;
+  }
+
+  function findColumns(data, imgW, imgH) {
+    var rows = Math.floor(imgH / PROJ_STEP);
+    var thr = Math.max(2, rows * 0.15);
+    var dens = [];
+    for (var x = 0; x < imgW; x++) {
+      var cnt = 0;
+      for (var y = 0; y < imgH; y += PROJ_STEP) {
+        var i = (y * imgW + x) * 4;
+        if ((data[i] + data[i + 1] + data[i + 2]) / 3 < WHITE_BRIGHT) cnt++;
+      }
+      dens.push(cnt);
+    }
+    var runs = [];
+    var start = -1;
+    for (x = 0; x <= imgW; x++) {
+      var on = x < imgW && dens[x] > thr;
+      if (on && start < 0) start = x;
+      if (!on && start >= 0) {
+        runs.push({ x0: start, x1: x - 1, w: x - start });
+        start = -1;
+      }
+    }
+    runs.sort(function (a, b) { return b.w - a.w; });
+    var minW = Math.round(imgW * 0.25);
+    runs = runs.slice(0, 2).filter(function (r) { return r.w >= minW; });
+    runs.sort(function (a, b) { return a.x0 - b.x0; });
+    return runs;
+  }
+
+  function findCoverBlocksInColumn(data, imgW, imgH, x0, x1) {
+    var colW = x1 - x0 + 1;
+    var dens = [];
+    for (var y = 0; y < imgH; y++) {
+      var cnt = 0;
+      var total = 0;
+      for (var x = x0; x <= x1; x += PROJ_STEP) {
+        total++;
+        var i = (y * imgW + x) * 4;
+        if ((data[i] + data[i + 1] + data[i + 2]) / 3 < WHITE_BRIGHT) cnt++;
+      }
+      dens.push(cnt / total);
+    }
+    var gapRows = Math.max(4, Math.round(imgH * 0.002));
+    var blocks = [];
+    y = 0;
+    while (y < imgH) {
+      if (dens[y] > GAP_ROW) {
+        var s = y;
+        var e = y;
+        var run = 0;
+        while (y < imgH) {
+          if (dens[y] <= GAP_ROW) {
+            run++;
+            if (run >= gapRows) break;
+          } else {
+            run = 0;
+            e = y;
+          }
+          y++;
+        }
+        blocks.push({ y0: s, y1: e });
+      } else {
+        y++;
+      }
+    }
+    var covers = [];
+    var minCoverH = Math.round(colW * 0.3);
+    for (var b = 0; b < blocks.length; b++) {
+      var blk = blocks[b];
+      // Blocks touching the very top are the fixed chrome (status bar, nav,
+      // tabs); real covers never start at y=0 inside the app.
+      if (blk.y0 <= 1) continue;
+      // Cover blocks are tall; title/author/like rows are short strips.
+      // White-background covers still segment correctly because the gaps
+      // around them are pure white while their interior is not.
+      if (blk.y1 - blk.y0 + 1 < minCoverH) continue;
+      covers.push({ y0: blk.y0, y1: blk.y1 });
+    }
+    return covers;
+  }
+
+  function detectGridCovers(data, imgW, imgH) {
+    var cols = findColumns(data, imgW, imgH);
+    var tiles = [];
+    for (var c = 0; c < cols.length; c++) {
+      var col = cols[c];
+      var blocks = findCoverBlocksInColumn(data, imgW, imgH, col.x0, col.x1);
+      for (var b = 0; b < blocks.length; b++) {
+        tiles.push({
+          col: c,
+          x: col.x0,
+          w: col.x1 - col.x0 + 1,
+          y0: blocks[b].y0,
+          y1: blocks[b].y1
+        });
+      }
+    }
+    // Reading order: sort top-down, split into rows by vertical overlap
+    tiles.sort(function (a, b) { return a.y0 - b.y0; });
+    var row = 0;
+    for (var t = 0; t < tiles.length; t++) {
+      if (t > 0) {
+        var prev = tiles[t - 1];
+        var overlap = Math.min(prev.y1, tiles[t].y1) - Math.max(prev.y0, tiles[t].y0);
+        if (overlap < (prev.y1 - prev.y0 + 1) * 0.5) row++;
+      }
+      tiles[t].row = row;
+    }
+    return tiles;
   }
 
   async function sliceFeed(bitmap) {
     var imgW = bitmap.width || bitmap.naturalWidth;
     var imgH = bitmap.height || bitmap.naturalHeight;
-    var layout = estimateLayout(imgW, imgH);
     var results = [];
-    var minArea = layout.colW * layout.cardH * 0.55;
-
-    for (var c = 0; c < layout.cols.length; c++) {
-      var x = layout.cols[c];
-      var y = layout.topInset;
-      var row = 0;
-      while (y + layout.cardH * 0.6 < imgH - layout.bottomInset && row < 12) {
-        var h = layout.cardH;
-        if (y + h > imgH - layout.bottomInset) {
-          h = imgH - layout.bottomInset - y;
-        }
-        if (h < layout.cardH * 0.55) break;
-        if (layout.colW * h < minArea) break;
-
-        var canvas = document.createElement('canvas');
-        canvas.width = layout.colW;
-        canvas.height = h;
-        var ctx = canvas.getContext('2d');
-        ctx.drawImage(
-          bitmap,
-          x, y, layout.colW, h,
-          0, 0, layout.colW, h
-        );
-
-        // Filter near-empty / too-uniform tiles (likely chrome leftovers)
-        if (!isTooUniform(ctx, layout.colW, h)) {
-          var blob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
-          if (blob) {
-            results.push({
-              id: uid(),
-              blob: blob,
-              width: layout.colW,
-              height: h,
-              sourceX: x,
-              sourceY: y,
-              col: c,
-              row: row
-            });
-          }
-        }
-
-        y += h + layout.vGap;
-        row += 1;
+    if (!imgW || !imgH) return results;
+    var data = buildPixelData(bitmap, imgW, imgH);
+    var tiles = detectGridCovers(data, imgW, imgH);
+    for (var t = 0; t < tiles.length; t++) {
+      var tile = tiles[t];
+      var h = tile.y1 - tile.y0 + 1;
+      var canvas = document.createElement('canvas');
+      canvas.width = tile.w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, tile.x, tile.y0, tile.w, h, 0, 0, tile.w, h);
+      var blob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
+      if (blob) {
+        results.push({
+          id: uid(),
+          blob: blob,
+          width: tile.w,
+          height: h,
+          sourceX: tile.x,
+          sourceY: tile.y0,
+          col: tile.col,
+          row: tile.row
+        });
       }
     }
-
     // Prefer reading order: row by row, left then right
     results.sort(function (a, b) {
       if (a.row !== b.row) return a.row - b.row;
       return a.col - b.col;
     });
     return results;
-  }
-
-  function isTooUniform(ctx, w, h) {
-    // Only drop near-blank chrome strips: very flat AND near white/light gray.
-    // Solid aesthetic color blocks must remain as valid covers.
-    try {
-      var sw = Math.min(w, 64);
-      var sh = Math.min(h, 64);
-      var sample = ctx.getImageData(0, 0, sw, sh).data;
-      var r0 = sample[0];
-      var g0 = sample[1];
-      var b0 = sample[2];
-      var diff = 0;
-      var n = 0;
-      var sumL = 0;
-      for (var i = 0; i < sample.length; i += 16) {
-        var r = sample[i];
-        var g = sample[i + 1];
-        var b = sample[i + 2];
-        diff += Math.abs(r - r0) + Math.abs(g - g0) + Math.abs(b - b0);
-        sumL += (r + g + b) / 3;
-        n += 1;
-      }
-      var avg = diff / Math.max(1, n);
-      var avgL = sumL / Math.max(1, n);
-      return avg < 4 && avgL > 235;
-    } catch (e) {
-      return false;
-    }
   }
 
   function setImportEmpty(isEmpty) {
@@ -897,6 +942,13 @@
     await renderImportPreview();
   }
 
+  function resetImport() {
+    state.pendingFiles = [];
+    state.pendingBitmaps = [];
+    if (el.fileInput) el.fileInput.value = '';
+    renderImportPreview();
+  }
+
   async function onSlice() {
     if (!state.pendingBitmaps.length) return;
     el.btnSlice.disabled = true;
@@ -929,6 +981,7 @@
     el.importPreview = $('import-preview');
     el.importActions = $('import-actions');
     el.btnSlice = $('btn-slice');
+    el.btnResetImport = $('btn-reset-import');
     el.fileInput = $('file-input');
     el.candidatesRail = $('candidates-rail');
     el.candidatesPager = $('candidates-pager');
@@ -984,6 +1037,10 @@
 
     el.btnSlice.addEventListener('click', function () {
       onSlice();
+    });
+
+    el.btnResetImport.addEventListener('click', function () {
+      resetImport();
     });
 
     el.btnSelectAll.addEventListener('click', function () {
