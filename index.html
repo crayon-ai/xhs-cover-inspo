@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>封面灵感收集</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand-row">
+        <h1 class="logo">封面灵感</h1>
+      </div>
+      <p class="hint-persist stamp-badge stamp-badge--quiet">本机存储 · 清缓存可能丢</p>
+    </header>
+
+    <nav class="tabs" id="tabs" aria-label="主导航">
+      <button type="button" class="tab is-active" data-view="import"><span>导入</span></button>
+      <button type="button" class="tab" data-view="candidates"><span>候选</span></button>
+      <button type="button" class="tab" data-view="library"><span>灵感库</span></button>
+      <button type="button" class="tab" data-view="export"><span>提示词</span></button>
+    </nav>
+
+    <main>
+      <!-- 导入 · ★B 柔光舞台 + 微堆 + Soft Breath 波纹 -->
+      <section id="view-import" class="view is-visible">
+        <div class="import-stage enter" id="import-stage">
+          <label class="import-hit" id="import-hit" for="file-input" aria-label="导入截图">
+            <span class="import-glow" aria-hidden="true"></span>
+            <span class="import-ripple" aria-hidden="true">
+              <span class="import-ripple__ring"></span>
+              <span class="import-ripple__ring"></span>
+            </span>
+            <span class="import-cluster" aria-hidden="true">
+              <span class="import-fake-stack" id="import-fake-stack">
+                <span class="import-fake-card import-fake-card--a"></span>
+                <span class="import-fake-card import-fake-card--b"></span>
+                <span class="import-fake-card import-fake-card--c"></span>
+              </span>
+              <span class="import-ring">
+                <span class="import-hit__plus">+</span>
+              </span>
+            </span>
+          </label>
+          <input id="file-input" type="file" accept="image/*" multiple hidden />
+          <div id="import-preview" class="import-preview is-hidden" aria-live="polite"></div>
+          <div id="import-actions" class="import-actions is-hidden">
+            <button type="button" id="btn-slice" class="btn primary" disabled>开始切封面</button>
+            <label class="btn ghost import-repick" for="file-input">换一张</label>
+          </div>
+        </div>
+      </section>
+
+      <!-- 候选 -->
+      <section id="view-candidates" class="view">
+        <div class="card soft enter">
+          <div class="section-head">
+            <h2>封面候选</h2>
+          </div>
+          <p class="muted" id="candidates-meta">先导入截图再切分。</p>
+          <div class="row-actions">
+            <button type="button" id="btn-select-all" class="btn ghost" disabled>全选</button>
+            <button type="button" id="btn-clear-sel" class="btn ghost" disabled>清空选择</button>
+          </div>
+          <div id="candidates-grid" class="grid covers"></div>
+          <button type="button" id="btn-save-selected" class="btn primary" disabled>为所选填写笔记</button>
+        </div>
+      </section>
+
+      <!-- 笔记表单（叠层） -->
+      <section id="view-note" class="view">
+        <div class="card soft enter">
+          <div class="section-head">
+            <h2>当场记笔记</h2>
+          </div>
+          <div id="note-cover-preview" class="note-cover polaroid"></div>
+          <form id="note-form" class="note-form">
+            <label>为何想点
+              <textarea id="field-why" rows="2" placeholder="标题/人物/配色吸引我…"></textarea>
+            </label>
+            <label>感觉
+              <textarea id="field-feeling" rows="2" placeholder="清爽 / 高级 / 热闹 / 安静…"></textarea>
+            </label>
+            <label>结构亮点
+              <textarea id="field-structure" rows="2" placeholder="大标题置顶、三分法、留白…"></textarea>
+            </label>
+            <label>画面可学点
+              <textarea id="field-learn" rows="2" placeholder="光影、材质、字体对比、色块…"></textarea>
+            </label>
+            <label>分类标签（逗号分隔）
+              <input id="field-tags" type="text" placeholder="美妆, 居家, 人物特写" />
+            </label>
+            <div id="tag-preview" class="chips tag-preview" aria-live="polite"></div>
+            <div class="row-actions">
+              <button type="button" id="btn-note-skip" class="btn ghost">跳过这张</button>
+              <button type="submit" class="btn primary">保存并下一张</button>
+            </div>
+          </form>
+          <p class="muted note-progress" id="note-progress"></p>
+        </div>
+      </section>
+
+      <!-- 灵感库 -->
+      <section id="view-library" class="view">
+        <div class="card soft enter">
+          <div class="section-head">
+            <h2>灵感库</h2>
+          </div>
+          <div class="filter-row">
+            <input id="tag-filter" type="text" placeholder="筛选标签" />
+            <button type="button" id="btn-filter" class="btn ghost">筛选</button>
+            <button type="button" id="btn-filter-clear" class="btn ghost">全部</button>
+          </div>
+          <div id="tag-chips" class="chips"></div>
+          <div id="library-list" class="library-list"></div>
+          <button type="button" id="btn-clear-all" class="btn danger ghost">清空全部灵感</button>
+        </div>
+      </section>
+
+      <!-- 提示词预览 / 导出替代 -->
+      <section id="view-export" class="view">
+        <div class="card soft enter">
+          <div class="section-head">
+            <h2>提示词预览</h2>
+          </div>
+          <p class="muted">无法下载或复制。请<strong class="mark-coral">长按截图</strong>保存。</p>
+          <div class="row-actions single">
+            <button type="button" id="btn-build-export" class="btn primary">生成汇总视图</button>
+          </div>
+          <div id="export-board" class="export-board empty">点上方按钮生成汇总。</div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span>Crayon_ · 封面灵感 · 离线</span>
+    </footer>
+  </div>
+  <script src="./app.js"></script>
+</body>
+</html>
