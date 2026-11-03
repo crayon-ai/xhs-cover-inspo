@@ -18,7 +18,6 @@
     noteQueue: [],
     noteIndex: 0,
     library: [],
-    categoryFilter: '',
     noteCategory: '',
     extraCategories: [],
     sheetId: null,
@@ -130,26 +129,22 @@
     var onImport = name === 'import';
     var onLibrary = name === 'library';
     var onNote = name === 'note';
-    var onExport = name === 'export';
-    var darkChrome = onImport || onLibrary || onNote || onExport;
+    var darkChrome = onImport || onLibrary || onNote;
     var appRoot = document.getElementById('app');
     if (appRoot) {
       appRoot.classList.toggle('is-import', onImport);
       appRoot.classList.toggle('is-library', onLibrary);
       appRoot.classList.toggle('is-note', onNote);
-      appRoot.classList.toggle('is-export', onExport);
       appRoot.classList.toggle('is-dark-chrome', darkChrome);
     }
     document.documentElement.classList.toggle('is-import', onImport);
     document.documentElement.classList.toggle('is-library', onLibrary);
     document.documentElement.classList.toggle('is-note', onNote);
-    document.documentElement.classList.toggle('is-export', onExport);
     document.documentElement.classList.toggle('is-dark-chrome', darkChrome);
     if (document.body) {
       document.body.classList.toggle('is-import', onImport);
       document.body.classList.toggle('is-library', onLibrary);
       document.body.classList.toggle('is-note', onNote);
-      document.body.classList.toggle('is-export', onExport);
       document.body.classList.toggle('is-dark-chrome', darkChrome);
     }
     if (!onLibrary) closeLibrarySheet();
@@ -401,88 +396,69 @@
     });
   }
 
-  var candidatesRailScrollBound = false;
-  var candidatesTiltRaf = 0;
+  /** Horizontal rail of all candidates, Pinterest-pile motion while
+   *  scrolling: each card keeps its own tilt at rest, rotation/scale/drift
+   *  shift with distance from center so cards tumble as the strip moves. */
+  var railTiltRaf = 0;
 
-  function getCenteredSlideIndex() {
+  function updateRailMotion() {
     var rail = el.pickRail;
-    if (!rail) return 0;
+    if (!rail) return;
     var slides = rail.querySelectorAll('.cover-card');
-    if (!slides.length) return 0;
-    var mid = rail.getBoundingClientRect().left + rail.clientWidth / 2;
-    var best = 0;
+    var n = slides.length;
+    if (!n) return;
+    var rect = rail.getBoundingClientRect();
+    var mid = rect.left + rail.clientWidth / 2;
+    var centered = 0;
     var bestDist = Infinity;
-    for (var i = 0; i < slides.length; i++) {
-      var r = slides[i].getBoundingClientRect();
+    for (var i = 0; i < n; i++) {
+      var slide = slides[i];
+      var r = slide.getBoundingClientRect();
       var c = (r.left + r.right) / 2;
+      var o = (c - mid) / Math.max(1, r.width);
+      if (o > 1.6) o = 1.6;
+      if (o < -1.6) o = -1.6;
+      var ao = Math.abs(o);
+      // Rest tilt at center, extra tumble toward the edges
+      var tilt = (slide.__tilt || 0) * (1 - ao * 0.55) + o * 9;
+      var sc = 1 - ao * 0.09;
+      if (sc < 0.86) sc = 0.86;
+      var ty = ao * 12 * (i % 2 ? -0.6 : 1); // subtle alternating drift
+      slide.style.transform =
+        'translateY(' + ty.toFixed(1) + 'px) rotate(' + tilt.toFixed(2) + 'deg) scale(' + sc.toFixed(3) + ')';
+      slide.style.filter = ao > 0.4 ? 'brightness(' + Math.max(0.55, 1 - ao * 0.3).toFixed(2) + ')' : '';
+      slide.classList.toggle('is-center', ao < 0.32);
       var d = Math.abs(c - mid);
       if (d < bestDist) {
         bestDist = d;
-        best = i;
+        centered = i;
       }
     }
-    return best;
+    if (el.pickPager) {
+      el.pickPager.classList.toggle('is-hidden', n === 0);
+      el.pickPager.textContent = n ? (centered + 1) + ' / ' + n : '';
+    }
   }
 
-  function isSlideCentered(slide) {
+  function onRailScroll() {
+    if (railTiltRaf) return;
+    if (window.requestAnimationFrame) {
+      railTiltRaf = window.requestAnimationFrame(function () {
+        railTiltRaf = 0;
+        updateRailMotion();
+      });
+    } else {
+      updateRailMotion();
+    }
+  }
+
+  function isCardCentered(slide) {
     var rail = el.pickRail;
     if (!rail || !slide) return false;
     var mid = rail.getBoundingClientRect().left + rail.clientWidth / 2;
     var r = slide.getBoundingClientRect();
     var c = (r.left + r.right) / 2;
     return Math.abs(c - mid) < Math.max(36, r.width * 0.32);
-  }
-
-  /** Craft Your Postcard-style tilt: center slight Z, neighbors rotateY away */
-  function updateCandidateTilts() {
-    var rail = el.pickRail;
-    if (!rail) return;
-    var slides = rail.querySelectorAll('.cover-card');
-    if (!slides.length) return;
-    var mid = rail.getBoundingClientRect().left + rail.clientWidth / 2;
-    for (var i = 0; i < slides.length; i++) {
-      var slide = slides[i];
-      var r = slide.getBoundingClientRect();
-      var c = (r.left + r.right) / 2;
-      var o = (c - mid) / Math.max(1, r.width);
-      if (o > 1.35) o = 1.35;
-      if (o < -1.35) o = -1.35;
-      /* keep neighbor faces readable (Craft peek), not edge-on */
-      var rotY = o * -34;
-      var rotZ = 5.5 - o * 7;
-      var sc = 1 - Math.abs(o) * 0.06;
-      if (sc < 0.88) sc = 0.88;
-      var ty = Math.abs(o) * 8;
-      slide.style.transform =
-        'perspective(900px) translateY(' + ty + 'px) rotateY(' + rotY + 'deg) rotateZ(' + rotZ + 'deg) scale(' + sc + ')';
-      slide.classList.toggle('is-center', Math.abs(o) < 0.28);
-    }
-  }
-
-  function updateCandidatesPager() {
-    if (!el.pickPager) return;
-    var n = state.candidates.length;
-    if (!n) {
-      el.pickPager.classList.add('is-hidden');
-      el.pickPager.textContent = '';
-      return;
-    }
-    el.pickPager.classList.remove('is-hidden');
-    var idx = getCenteredSlideIndex();
-    el.pickPager.textContent = (idx + 1) + ' / ' + n;
-    updateCandidateTilts();
-  }
-
-  function onCandidatesRailScroll() {
-    if (candidatesTiltRaf) return;
-    if (window.requestAnimationFrame) {
-      candidatesTiltRaf = window.requestAnimationFrame(function () {
-        candidatesTiltRaf = 0;
-        updateCandidatesPager();
-      });
-    } else {
-      updateCandidatesPager();
-    }
   }
 
   function renderCandidates() {
@@ -493,17 +469,18 @@
     rail.classList.toggle('is-empty', !n);
     updateSaveSelectedBtn();
 
-    if (!candidatesRailScrollBound && rail) {
-      rail.addEventListener('scroll', onCandidatesRailScroll, { passive: true });
-      candidatesRailScrollBound = true;
+    if (!rail.__scrollBound) {
+      rail.__scrollBound = true;
+      rail.addEventListener('scroll', onRailScroll, { passive: true });
     }
 
-    state.candidates.forEach(function (c) {
+    state.candidates.forEach(function (c, i) {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'cover-card' + (state.selectedIds[c.id] ? ' is-selected' : '');
       btn.setAttribute('data-id', c.id);
-      btn.setAttribute('aria-label', '封面');
+      btn.setAttribute('aria-label', '封面 ' + (i + 1));
+      btn.__tilt = ((i * 47) % 11) - 5; // deterministic per-card rest tilt, -5..5deg
       var face = document.createElement('span');
       face.className = 'cover-face';
       var canvas = document.createElement('canvas');
@@ -517,18 +494,18 @@
       rail.appendChild(btn);
       paintBlobToCanvas(c.blob, canvas).catch(function () {});
 
-      var dragOriginX = 0;
-      var dragMoved = false;
+      var originX = 0;
+      var moved = false;
       btn.addEventListener('pointerdown', function (ev) {
-        dragOriginX = ev.clientX;
-        dragMoved = false;
+        originX = ev.clientX;
+        moved = false;
       });
       btn.addEventListener('pointermove', function (ev) {
-        if (Math.abs(ev.clientX - dragOriginX) > 10) dragMoved = true;
+        if (Math.abs(ev.clientX - originX) > 10) moved = true;
       });
       btn.addEventListener('click', function () {
-        if (dragMoved) return;
-        if (!isSlideCentered(btn)) {
+        if (moved) return;
+        if (!isCardCentered(btn)) {
           if (btn.scrollIntoView) {
             btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
           }
@@ -546,7 +523,7 @@
 
     function afterLayout() {
       rail.scrollLeft = 0;
-      updateCandidatesPager();
+      updateRailMotion();
     }
     if (window.requestAnimationFrame) {
       window.requestAnimationFrame(afterLayout);
@@ -671,8 +648,7 @@
       if (el.pickRail) el.pickRail.innerHTML = '';
       showPick(false);
       await refreshLibrary();
-      showView('export');
-      renderExport();
+      showView('library');
       return;
     }
     fillNoteForm();
@@ -846,10 +822,15 @@
     return 4 / 3;
   }
 
-  function makeLibraryCard(item) {
+  function makeLibraryCard(item, extraClass) {
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'lib-card';
+    btn.className = 'lib-card' + (extraClass ? ' ' + extraClass : '');
+    if (extraClass === 'lib-row-card') {
+      var w = item && item.width ? item.width : 0;
+      var h = item && item.height ? item.height : 0;
+      btn.style.aspectRatio = (w > 0 && h > 0) ? (w + ' / ' + h) : '3 / 4';
+    }
     var label = recordCategory(item);
     if (item.feeling) label += '，' + item.feeling;
     btn.setAttribute('aria-label', label);
@@ -864,68 +845,96 @@
     return btn;
   }
 
-  function passesCategoryFilter(item) {
-    var filter = state.categoryFilter || '';
-    if (!filter) return true;
-    if (state.sheetId && item && item.id === state.sheetId) return true;
-    return recordCategory(item) === filter;
-  }
-
   function renderLibrary() {
-    var names = sortedCategoryNames(false);
-    if (state.categoryFilter && names.indexOf(state.categoryFilter) === -1) {
-      names.push(state.categoryFilter);
-    }
-    var filter = state.categoryFilter || '';
-    var list = (state.library || []).filter(passesCategoryFilter);
-
-    if (el.catBar) {
-      var keepScroll = el.catBar.scrollLeft || 0;
-      el.catBar.innerHTML = '';
-      var options = [''].concat(names);
-      options.forEach(function (name) {
-        var label = name || '全部';
-        var active = filter === name;
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'cat-chip' + (active ? ' is-active' : '');
-        b.textContent = label;
-        b.setAttribute('role', 'tab');
-        b.setAttribute('aria-selected', active ? 'true' : 'false');
-        b.addEventListener('click', function () {
-          state.categoryFilter = name;
-          renderLibrary();
-          if (el.libScroll) el.libScroll.scrollTop = 0;
-        });
-        el.catBar.appendChild(b);
-      });
-      el.catBar.scrollLeft = keepScroll;
-    }
-
-    if (el.btnClearAll) el.btnClearAll.hidden = !(state.library && state.library.length);
-
-    var box = el.libraryList;
-    if (!box) return;
-    box.innerHTML = '';
-    var empty = !list.length;
-    box.hidden = empty;
+    var isEmpty = !(state.library && state.library.length);
+    if (el.libraryRows) el.libraryRows.hidden = isEmpty;
     if (el.libraryEmpty) {
-      el.libraryEmpty.hidden = !empty;
+      el.libraryEmpty.hidden = !isEmpty;
       el.libraryEmpty.textContent = '空';
     }
-    if (empty) return;
+    if (el.btnClearAll) el.btnClearAll.hidden = isEmpty;
+    if (isEmpty) return;
+    renderLibraryRows();
+  }
 
-    var cols = [document.createElement('div'), document.createElement('div')];
-    var heights = [0, 0];
-    cols[0].className = 'lib-col';
-    cols[1].className = 'lib-col';
-    list.forEach(function (item) {
-      var side = heights[0] <= heights[1] ? 0 : 1;
-      heights[side] += coverRatio(item);
-      cols[side].appendChild(makeLibraryCard(item));
+  function buildLibRow(sec) {
+    var row = document.createElement('section');
+    row.className = 'lib-row';
+    var head = document.createElement('div');
+    head.className = 'lib-row-head';
+    var title = document.createElement('span');
+    title.className = 'lib-row-title';
+    title.textContent = sec.title;
+    head.appendChild(title);
+    var count = document.createElement('span');
+    count.className = 'lib-row-count';
+    count.textContent = sec.items.length;
+    head.appendChild(count);
+    row.appendChild(head);
+    var track = document.createElement('div');
+    track.className = 'lib-row-track';
+    row.appendChild(track);
+    row.__items = sec.items;
+    row.__rendered = false;
+    return row;
+  }
+
+  function renderLibRowItems(row) {
+    if (!row || row.__rendered) return;
+    row.__rendered = true;
+    var track = row.querySelector('.lib-row-track');
+    if (!track) return;
+    (row.__items || []).forEach(function (item) {
+      track.appendChild(makeLibraryCard(item, 'lib-row-card'));
     });
-    box.appendChild(cols[0]);
-    box.appendChild(cols[1]);
+  }
+
+  var libRowObserver = null;
+
+  function observeLibRows() {
+    if (!el.libraryRows) return;
+    if (libRowObserver) {
+      libRowObserver.disconnect();
+      libRowObserver = null;
+    }
+    var rows = qsAll('.lib-row', el.libraryRows);
+    if (typeof IntersectionObserver !== 'function') {
+      rows.forEach(renderLibRowItems);
+      return;
+    }
+    libRowObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        renderLibRowItems(en.target);
+        if (libRowObserver) libRowObserver.unobserve(en.target);
+      });
+    }, { root: el.libScroll || null, rootMargin: '120% 0px' });
+    rows.forEach(function (r) {
+      libRowObserver.observe(r);
+    });
+  }
+
+  function renderLibraryRows() {
+    if (!el.libraryRows) return;
+    el.libraryRows.innerHTML = '';
+    var names = sortedCategoryNames(false);
+    var sections = [];
+    if (names.length > 1) {
+      sections.push({ name: '', title: '最近收藏', items: state.library || [] });
+    }
+    names.forEach(function (name) {
+      sections.push({
+        name: name,
+        title: name,
+        items: (state.library || []).filter(function (it) {
+          return recordCategory(it) === name;
+        })
+      });
+    });
+    sections.forEach(function (sec) {
+      el.libraryRows.appendChild(buildLibRow(sec));
+    });
+    observeLibRows();
   }
 
   function sheetAddField(parent, label, value) {
@@ -963,12 +972,6 @@
   }
 
   function closeLibrarySheet() {
-    var id = state.sheetId;
-    var dropFromFilter = false;
-    if (id && state.categoryFilter) {
-      var openItem = libraryItemById(id);
-      if (openItem && recordCategory(openItem) !== state.categoryFilter) dropFromFilter = true;
-    }
     state.sheetId = null;
     state.sheetBase = null;
     state.sheetDraft = null;
@@ -978,7 +981,6 @@
     if (el.sheetPanel) el.sheetPanel.style.transform = '';
     if (el.sheetCover) el.sheetCover.innerHTML = '';
     if (el.libSheet) el.libSheet.hidden = true;
-    if (dropFromFilter) renderLibrary();
   }
 
   function sheetSnapshot(item) {
@@ -1233,222 +1235,6 @@
     if (dy > 72) closeLibrarySheet();
   }
 
-  function buildPromptText(item) {
-    var lines = [];
-    lines.push('【小红书封面参考提示词】');
-    lines.push('目标：生成一张小红书笔记封面，竖版约 3:4。');
-    var explicitCat = item.category ? String(item.category).trim() : '';
-    if (explicitCat) lines.push('分类：' + explicitCat);
-    if (item.feeling) lines.push('整体感觉：' + item.feeling);
-    if (item.whyClick) lines.push('吸引点击的点：' + item.whyClick);
-    if (item.structure) lines.push('构图/结构：' + item.structure);
-    if (item.learnable) lines.push('画面可学点：' + item.learnable);
-    if (item.tags && item.tags.length) lines.push('标签：' + item.tags.join('、'));
-    lines.push('要求：保留参考图的构图节奏与信息层级，避免空洞 AI 味；中文大标题可替换为具体主题。');
-    lines.push('（请同时参考上方封面图）');
-    return lines.join('\n');
-  }
-
-  var exportItems = [];
-  var exportFocusRaf = 0;
-  var copyBtnTimer = 0;
-
-  function fitExportCanvas(canvas, tries) {
-    var nw = canvas.width;
-    var nh = canvas.height;
-    var slide = canvas.parentNode;
-    if (!nw || !nh || !slide) return;
-    var maxW = slide.clientWidth;
-    var maxH = slide.clientHeight;
-    if (!maxW || !maxH) {
-      if ((tries || 0) < 8 && window.requestAnimationFrame) {
-        window.requestAnimationFrame(function () { fitExportCanvas(canvas, (tries || 0) + 1); });
-      }
-      return;
-    }
-    var scale = Math.min(maxW / nw, maxH / nh);
-    canvas.style.width = Math.max(1, Math.round(nw * scale)) + 'px';
-    canvas.style.height = Math.max(1, Math.round(nh * scale)) + 'px';
-  }
-
-  function resetCopyButton() {
-    if (copyBtnTimer) clearTimeout(copyBtnTimer);
-    copyBtnTimer = 0;
-    if (el.btnBuildExport) el.btnBuildExport.textContent = '复制提示词';
-  }
-
-  function selectExportCopy() {
-    var node = el.exportCopy;
-    if (!node || !window.getSelection) return;
-    var sel = window.getSelection();
-    sel.removeAllRanges();
-    var range = document.createRange();
-    range.selectNodeContents(node);
-    sel.addRange(range);
-  }
-
-  function flashCopyButton() {
-    if (!el.btnBuildExport) return;
-    el.btnBuildExport.textContent = '长按复制';
-    if (copyBtnTimer) clearTimeout(copyBtnTimer);
-    copyBtnTimer = setTimeout(function () {
-      copyBtnTimer = 0;
-      if (el.btnBuildExport) el.btnBuildExport.textContent = '复制提示词';
-    }, 1600);
-  }
-
-  function prepareCopyPrompt() {
-    var after = function () {
-      if (!exportItems.length || !el.exportCopy) return;
-      selectExportCopy();
-      flashCopyButton();
-    };
-    if (!exportItems.length) {
-      renderExport().then(after);
-      return;
-    }
-    after();
-  }
-
-  function exportCenterIndex(rail) {
-    var slides = rail.querySelectorAll('.export-slide');
-    if (!slides.length) return 0;
-    var mid = rail.getBoundingClientRect().left + rail.clientWidth / 2;
-    var best = 0;
-    var bestDist = Infinity;
-    for (var i = 0; i < slides.length; i++) {
-      var r = slides[i].getBoundingClientRect();
-      var c = (r.left + r.right) / 2;
-      var d = Math.abs(c - mid);
-      if (d < bestDist) {
-        bestDist = d;
-        best = i;
-      }
-    }
-    return best;
-  }
-
-  function syncExportFocus(rail) {
-    if (!rail) return;
-    var i = exportCenterIndex(rail);
-    if (el.exportCopy && exportItems[i]) {
-      el.exportCopy.textContent = buildPromptText(exportItems[i]);
-    }
-    var dots = rail.parentNode ? rail.parentNode.querySelectorAll('.export-dot') : [];
-    for (var d = 0; d < dots.length; d++) {
-      dots[d].classList.toggle('is-on', d === i);
-    }
-  }
-
-  function scrollExportTo(rail, index) {
-    var slides = rail.querySelectorAll('.export-slide');
-    if (!slides.length) return;
-    var i = index;
-    if (i < 0) i = slides.length - 1;
-    if (i >= slides.length) i = 0;
-    if (slides[i].scrollIntoView) {
-      slides[i].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    } else {
-      rail.scrollLeft = slides[i].offsetLeft;
-    }
-    syncExportFocus(rail);
-  }
-
-  async function renderExport() {
-    var board = el.exportBoard;
-    board.innerHTML = '';
-    board.classList.remove('empty');
-    exportItems = [];
-    el.exportCopy = null;
-    resetCopyButton();
-    if (!state.library.length) {
-      await refreshLibrary();
-    }
-    var list = state.library;
-    if (!list.length) {
-      board.classList.add('empty');
-      board.textContent = '';
-      return;
-    }
-
-    exportItems = list.slice();
-    var hero = document.createElement('div');
-    hero.className = 'export-hero';
-    var rail = document.createElement('div');
-    rail.className = 'export-rail';
-    rail.setAttribute('aria-label', '封面');
-    var sheet = document.createElement('div');
-    sheet.className = 'export-sheet';
-    var dots = document.createElement('div');
-    dots.className = 'export-dots' + (list.length < 2 ? ' is-hidden' : '');
-    var pre = document.createElement('pre');
-    pre.className = 'export-copy';
-    pre.tabIndex = -1;
-    pre.textContent = buildPromptText(list[0]);
-    el.exportCopy = pre;
-    sheet.appendChild(dots);
-    sheet.appendChild(pre);
-
-    for (var i = 0; i < list.length; i++) {
-      (function (index) {
-        var slide = document.createElement('button');
-        slide.type = 'button';
-        slide.className = 'export-slide';
-        slide.setAttribute('aria-label', '封面');
-        var canvas = document.createElement('canvas');
-        slide.appendChild(canvas);
-        rail.appendChild(slide);
-        var originX = 0;
-        var moved = false;
-        slide.addEventListener('pointerdown', function (ev) {
-          originX = ev.clientX;
-          moved = false;
-        });
-        slide.addEventListener('pointermove', function (ev) {
-          if (Math.abs(ev.clientX - originX) > 8) moved = true;
-        });
-        slide.addEventListener('click', function () {
-          if (moved || list.length < 2) return;
-          var current = exportCenterIndex(rail);
-          scrollExportTo(rail, current === index ? index + 1 : index);
-        });
-        if (list.length > 1) {
-          var dot = document.createElement('button');
-          dot.type = 'button';
-          dot.className = 'export-dot' + (index === 0 ? ' is-on' : '');
-          dot.setAttribute('aria-label', String(index + 1));
-          dot.addEventListener('click', function () {
-            scrollExportTo(rail, index);
-          });
-          dots.appendChild(dot);
-        }
-        paintBlobToCanvas(list[index].imageBlob, canvas).then(function () {
-          fitExportCanvas(canvas);
-        }).catch(function () {});
-      })(i);
-    }
-
-    rail.addEventListener('scroll', function () {
-      if (exportFocusRaf) return;
-      if (window.requestAnimationFrame) {
-        exportFocusRaf = window.requestAnimationFrame(function () {
-          exportFocusRaf = 0;
-          syncExportFocus(rail);
-        });
-      } else {
-        syncExportFocus(rail);
-      }
-    }, false);
-
-    hero.appendChild(rail);
-    hero.appendChild(sheet);
-    board.appendChild(hero);
-    if (typeof bindScrollReveal === 'function') {
-      bindScrollReveal(rail);
-      bindScrollReveal(sheet);
-    }
-  }
-
   async function onFilesChosen(fileList) {
     var files = Array.prototype.slice.call(fileList || []).filter(function (f) {
       return f && f.type && f.type.indexOf('image/') === 0;
@@ -1468,6 +1254,17 @@
       }
     }
     await slicePending();
+  }
+
+  function resetPick() {
+    state.pendingFiles = [];
+    state.pendingBitmaps = [];
+    state.candidates = [];
+    state.selectedIds = {};
+    if (el.fileInput) el.fileInput.value = '';
+    if (el.pickRail) el.pickRail.innerHTML = '';
+    updateSaveSelectedBtn();
+    showPick(false);
   }
 
   async function slicePending() {
@@ -1524,10 +1321,9 @@
     el.tagPreview = $('tag-preview');
     el.noteProgress = $('note-progress');
     el.btnNoteSkip = $('btn-note-skip');
-    el.libraryList = $('library-list');
+    el.libraryRows = $('library-rows');
     el.libraryEmpty = $('library-empty');
     el.libScroll = $('lib-scroll');
-    el.catBar = $('cat-bar');
     el.noteCatChips = $('note-cat-chips');
     el.fieldNewCat = $('field-new-cat');
     el.btnAddCat = $('btn-add-cat');
@@ -1545,8 +1341,7 @@
     el.sheetConfirmCancel = $('sheet-confirm-cancel');
     el.sheetConfirmOk = $('sheet-confirm-ok');
     el.sheetConfirmBackdrop = $('sheet-confirm-backdrop');
-    el.exportBoard = $('export-board');
-    el.btnBuildExport = $('btn-build-export');
+    el.btnRepick = $('btn-repick');
 
     qsAll('.tab').forEach(function (tab) {
       tab.addEventListener('click', function () {
@@ -1556,8 +1351,6 @@
           refreshLibrary().then(function () {
             showView('library');
           });
-        } else if (name === 'export') {
-          showView('export');
         } else {
           showView(name);
           if (name === 'import') refreshImportStack();
@@ -1572,6 +1365,12 @@
     el.btnNote.addEventListener('click', function () {
       startNoteFlow();
     });
+
+    if (el.btnRepick) {
+      el.btnRepick.addEventListener('click', function () {
+        resetPick();
+      });
+    }
 
     el.noteForm.addEventListener('submit', function (ev) {
       ev.preventDefault();
@@ -1676,7 +1475,6 @@
         openDb().then(function (db) {
           return idbClear(db).then(function () {
             db.close();
-            state.categoryFilter = '';
             closeLibrarySheet();
             return refreshLibrary();
           });
@@ -1684,10 +1482,6 @@
           alert('清空失败');
         });
       });
-    });
-
-    el.btnBuildExport.addEventListener('click', function () {
-      prepareCopyPrompt();
     });
   }
 
