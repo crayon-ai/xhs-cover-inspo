@@ -125,29 +125,25 @@
       t.classList.toggle('is-active', t.getAttribute('data-view') === name);
     });
     var onImport = name === 'import';
-    var onCandidates = name === 'candidates';
     var onLibrary = name === 'library';
     var onNote = name === 'note';
     var onExport = name === 'export';
-    var darkChrome = onImport || onCandidates || onLibrary || onNote || onExport;
+    var darkChrome = onImport || onLibrary || onNote || onExport;
     var appRoot = document.getElementById('app');
     if (appRoot) {
       appRoot.classList.toggle('is-import', onImport);
-      appRoot.classList.toggle('is-candidates', onCandidates);
       appRoot.classList.toggle('is-library', onLibrary);
       appRoot.classList.toggle('is-note', onNote);
       appRoot.classList.toggle('is-export', onExport);
       appRoot.classList.toggle('is-dark-chrome', darkChrome);
     }
     document.documentElement.classList.toggle('is-import', onImport);
-    document.documentElement.classList.toggle('is-candidates', onCandidates);
     document.documentElement.classList.toggle('is-library', onLibrary);
     document.documentElement.classList.toggle('is-note', onNote);
     document.documentElement.classList.toggle('is-export', onExport);
     document.documentElement.classList.toggle('is-dark-chrome', darkChrome);
     if (document.body) {
       document.body.classList.toggle('is-import', onImport);
-      document.body.classList.toggle('is-candidates', onCandidates);
       document.body.classList.toggle('is-library', onLibrary);
       document.body.classList.toggle('is-note', onNote);
       document.body.classList.toggle('is-export', onExport);
@@ -181,19 +177,6 @@
       };
       img.src = url;
     });
-  }
-
-  function drawBitmapToCanvas(bitmap, maxW) {
-    var w = bitmap.width || bitmap.naturalWidth;
-    var h = bitmap.height || bitmap.naturalHeight;
-    var scale = 1;
-    if (maxW && w > maxW) scale = maxW / w;
-    var canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(w * scale));
-    canvas.height = Math.max(1, Math.round(h * scale));
-    var ctx = canvas.getContext('2d');
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    return canvas;
   }
 
   function canvasToBlob(canvas, type, quality) {
@@ -378,43 +361,10 @@
     return results;
   }
 
-  function setImportEmpty(isEmpty) {
-    if (el.importHit) {
-      el.importHit.classList.toggle('is-hidden', !isEmpty);
-    }
-    if (el.importPreview) {
-      el.importPreview.classList.toggle('is-hidden', isEmpty);
-    }
-    if (el.importActions) {
-      el.importActions.classList.toggle('is-hidden', isEmpty);
-    }
-    if (el.importStage) {
-      el.importStage.classList.toggle('is-preview', !isEmpty);
-    }
-  }
-
-  async function renderImportPreview() {
-    var box = el.importPreview;
-    box.innerHTML = '';
-    if (!state.pendingBitmaps.length) {
-      setImportEmpty(true);
-      el.btnSlice.disabled = true;
-      return;
-    }
-    setImportEmpty(false);
-    var first = state.pendingBitmaps[0];
-    var frame = document.createElement('div');
-    frame.className = 'import-preview__frame';
-    var canvas = drawBitmapToCanvas(first, 420);
-    frame.appendChild(canvas);
-    box.appendChild(frame);
-    if (state.pendingBitmaps.length > 1) {
-      var tip = document.createElement('p');
-      tip.className = 'import-preview__meta';
-      tip.textContent = state.pendingBitmaps.length + ' 张';
-      box.appendChild(tip);
-    }
-    el.btnSlice.disabled = false;
+  function showPick(on) {
+    if (el.importHit) el.importHit.classList.toggle('is-hidden', !!on);
+    if (el.pickStage) el.pickStage.classList.toggle('is-hidden', !on);
+    if (el.importStage) el.importStage.classList.toggle('is-pick', !!on);
   }
 
   function paintBlobToCanvas(blob, targetCanvas) {
@@ -452,7 +402,7 @@
   var candidatesTiltRaf = 0;
 
   function getCenteredSlideIndex() {
-    var rail = el.candidatesRail;
+    var rail = el.pickRail;
     if (!rail) return 0;
     var slides = rail.querySelectorAll('.cover-card');
     if (!slides.length) return 0;
@@ -472,7 +422,7 @@
   }
 
   function isSlideCentered(slide) {
-    var rail = el.candidatesRail;
+    var rail = el.pickRail;
     if (!rail || !slide) return false;
     var mid = rail.getBoundingClientRect().left + rail.clientWidth / 2;
     var r = slide.getBoundingClientRect();
@@ -482,7 +432,7 @@
 
   /** Craft Your Postcard-style tilt: center slight Z, neighbors rotateY away */
   function updateCandidateTilts() {
-    var rail = el.candidatesRail;
+    var rail = el.pickRail;
     if (!rail) return;
     var slides = rail.querySelectorAll('.cover-card');
     if (!slides.length) return;
@@ -507,16 +457,16 @@
   }
 
   function updateCandidatesPager() {
-    if (!el.candidatesPager) return;
+    if (!el.pickPager) return;
     var n = state.candidates.length;
     if (!n) {
-      el.candidatesPager.classList.add('is-hidden');
-      el.candidatesPager.textContent = '';
+      el.pickPager.classList.add('is-hidden');
+      el.pickPager.textContent = '';
       return;
     }
-    el.candidatesPager.classList.remove('is-hidden');
+    el.pickPager.classList.remove('is-hidden');
     var idx = getCenteredSlideIndex();
-    el.candidatesPager.textContent = (idx + 1) + ' / ' + n;
+    el.pickPager.textContent = (idx + 1) + ' / ' + n;
     updateCandidateTilts();
   }
 
@@ -533,14 +483,10 @@
   }
 
   function renderCandidates() {
-    var rail = el.candidatesRail;
+    var rail = el.pickRail;
+    if (!rail) return;
     rail.innerHTML = '';
     var n = state.candidates.length;
-    el.candidatesMeta.textContent = n
-      ? ('共切出 ' + n + ' 张。左右滑切换，点中间卡选中。')
-      : '先导入截图再切分。';
-    el.btnSelectAll.disabled = !n;
-    el.btnClearSel.disabled = !n;
     rail.classList.toggle('is-empty', !n);
     updateSaveSelectedBtn();
 
@@ -554,7 +500,7 @@
       btn.type = 'button';
       btn.className = 'cover-card' + (state.selectedIds[c.id] ? ' is-selected' : '');
       btn.setAttribute('data-id', c.id);
-      btn.setAttribute('aria-label', '候选封面');
+      btn.setAttribute('aria-label', '封面');
       var face = document.createElement('span');
       face.className = 'cover-face';
       var canvas = document.createElement('canvas');
@@ -607,21 +553,16 @@
   }
 
   function updateSaveSelectedBtn() {
+    if (!el.btnNote) return;
     var count = Object.keys(state.selectedIds).length;
-    el.btnSaveSelected.disabled = count === 0;
-    el.btnSaveSelected.textContent = count
-      ? ('为所选填写笔记（' + count + '）')
-      : '为所选填写笔记';
+    el.btnNote.disabled = count === 0;
   }
 
   function startNoteFlow() {
     var queue = state.candidates.filter(function (c) {
       return state.selectedIds[c.id];
     });
-    if (!queue.length) {
-      alert('请先点选至少一张封面');
-      return;
-    }
+    if (!queue.length) return;
     state.noteQueue = queue;
     state.noteIndex = 0;
     showView('note');
@@ -719,9 +660,16 @@
     state.noteIndex += 1;
     if (state.noteIndex >= state.noteQueue.length) {
       state.selectedIds = {};
+      state.candidates = [];
+      state.pendingFiles = [];
+      state.pendingBitmaps = [];
+      state.noteQueue = [];
+      if (el.fileInput) el.fileInput.value = '';
+      if (el.pickRail) el.pickRail.innerHTML = '';
+      showPick(false);
       await refreshLibrary();
-      showView('library');
-      alert(skip ? '本轮结束' : '已保存到灵感库');
+      showView('export');
+      renderExport();
       return;
     }
     fillNoteForm();
@@ -1246,56 +1194,47 @@
         alert('有一张图无法读取，已跳过');
       }
     }
-    await renderImportPreview();
+    await slicePending();
   }
 
-  function resetImport() {
-    state.pendingFiles = [];
-    state.pendingBitmaps = [];
-    if (el.fileInput) el.fileInput.value = '';
-    renderImportPreview();
-  }
-
-  async function onSlice() {
-    if (!state.pendingBitmaps.length) return;
-    el.btnSlice.disabled = true;
-    el.btnSlice.textContent = '切分中…';
+  async function slicePending() {
+    if (!state.pendingBitmaps.length) {
+      showPick(false);
+      return;
+    }
     var all = [];
     try {
       for (var i = 0; i < state.pendingBitmaps.length; i++) {
         var part = await sliceFeed(state.pendingBitmaps[i]);
         all = all.concat(part);
       }
-      state.candidates = all;
-      state.selectedIds = {};
-      renderCandidates();
-      showView('candidates');
-      if (!all.length) {
-        alert('没有切出可用封面，请换一张更接近双列信息流的整屏截图试试');
-      }
     } catch (e) {
       alert('切分失败：' + (e && e.message ? e.message : '未知错误'));
-    } finally {
-      el.btnSlice.disabled = false;
-      el.btnSlice.textContent = '开始切封面';
+      showPick(false);
+      return;
     }
+    state.candidates = all;
+    state.selectedIds = {};
+    if (!all.length) {
+      alert('没有切出可用封面，请换一张更接近双列信息流的整屏截图试试');
+      showPick(false);
+      if (el.pickRail) el.pickRail.innerHTML = '';
+      return;
+    }
+    showView('import');
+    showPick(true);
+    renderCandidates();
   }
 
   function bind() {
     el.importHit = $('import-hit');
     el.importStage = $('import-stage');
     el.importFakeStack = $('import-fake-stack');
-    el.importPreview = $('import-preview');
-    el.importActions = $('import-actions');
-    el.btnSlice = $('btn-slice');
-    el.btnResetImport = $('btn-reset-import');
+    el.pickStage = $('pick-stage');
+    el.pickRail = $('pick-rail');
+    el.pickPager = $('pick-pager');
+    el.btnNote = $('btn-note');
     el.fileInput = $('file-input');
-    el.candidatesRail = $('candidates-rail');
-    el.candidatesPager = $('candidates-pager');
-    el.candidatesMeta = $('candidates-meta');
-    el.btnSelectAll = $('btn-select-all');
-    el.btnClearSel = $('btn-clear-sel');
-    el.btnSaveSelected = $('btn-save-selected');
     el.noteCover = $('note-cover-preview');
     el.noteForm = $('note-form');
     el.fieldWhy = $('field-why');
@@ -1334,13 +1273,6 @@
           });
         } else if (name === 'export') {
           showView('export');
-        } else if (name === 'note') {
-          if (!state.noteQueue.length) {
-            alert('请先在候选里选择封面');
-            showView('candidates');
-            return;
-          }
-          showView('note');
         } else {
           showView(name);
           if (name === 'import') refreshImportStack();
@@ -1352,27 +1284,7 @@
       onFilesChosen(el.fileInput.files);
     });
 
-    el.btnSlice.addEventListener('click', function () {
-      onSlice();
-    });
-
-    el.btnResetImport.addEventListener('click', function () {
-      resetImport();
-    });
-
-    el.btnSelectAll.addEventListener('click', function () {
-      state.candidates.forEach(function (c) {
-        state.selectedIds[c.id] = true;
-      });
-      renderCandidates();
-    });
-
-    el.btnClearSel.addEventListener('click', function () {
-      state.selectedIds = {};
-      renderCandidates();
-    });
-
-    el.btnSaveSelected.addEventListener('click', function () {
+    el.btnNote.addEventListener('click', function () {
       startNoteFlow();
     });
 
