@@ -911,7 +911,7 @@
     box.hidden = empty;
     if (el.libraryEmpty) {
       el.libraryEmpty.hidden = !empty;
-      el.libraryEmpty.textContent = filter ? '这个分类是空的' : '还没有封面';
+      el.libraryEmpty.textContent = '空';
     }
     if (empty) return;
 
@@ -1259,7 +1259,7 @@
     var list = state.library;
     if (!list.length) {
       board.classList.add('empty');
-      board.textContent = '还没有封面';
+      board.textContent = '空';
       return;
     }
 
@@ -1346,6 +1346,12 @@
     el.pickPager = $('pick-pager');
     el.btnNote = $('btn-note');
     el.fileInput = $('file-input');
+    el.tabs = $('tabs');
+    el.ask = $('ask');
+    el.askText = $('ask-text');
+    el.askCancel = $('ask-cancel');
+    el.askOk = $('ask-ok');
+    el.askBackdrop = $('ask-backdrop');
     el.noteCover = $('note-cover-preview');
     el.noteForm = $('note-form');
     el.fieldWhy = $('field-why');
@@ -1382,6 +1388,7 @@
 
     qsAll('.tab').forEach(function (tab) {
       tab.addEventListener('click', function () {
+        hideTabs();
         var name = tab.getAttribute('data-view');
         if (name === 'library') {
           refreshLibrary().then(function () {
@@ -1472,15 +1479,16 @@
       el.sheetDelete.addEventListener('click', function () {
         var id = state.sheetId;
         if (!id) return;
-        if (!confirm('确定删除这张封面？')) return;
-        openDb().then(function (db) {
-          return idbDelete(db, id).then(function () {
-            db.close();
-            closeLibrarySheet();
-            return refreshLibrary();
+        askConfirm('删除这张？', function () {
+          openDb().then(function (db) {
+            return idbDelete(db, id).then(function () {
+              db.close();
+              closeLibrarySheet();
+              return refreshLibrary();
+            });
+          }).catch(function () {
+            alert('删除失败');
           });
-        }).catch(function () {
-          alert('删除失败');
         });
       });
     }
@@ -1502,16 +1510,17 @@
     });
 
     el.btnClearAll.addEventListener('click', function () {
-      if (!confirm('确定清空全部灵感？此操作不可恢复。')) return;
-      openDb().then(function (db) {
-        return idbClear(db).then(function () {
-          db.close();
-          state.categoryFilter = '';
-          closeLibrarySheet();
-          return refreshLibrary();
+      askConfirm('清空全部？', function () {
+        openDb().then(function (db) {
+          return idbClear(db).then(function () {
+            db.close();
+            state.categoryFilter = '';
+            closeLibrarySheet();
+            return refreshLibrary();
+          });
+        }).catch(function () {
+          alert('清空失败');
         });
-      }).catch(function () {
-        alert('清空失败');
       });
     });
 
@@ -1520,8 +1529,69 @@
     });
   }
 
+  var tabTimer = 0;
+  var askHandler = null;
+  var gestureY = 0;
+
+  function revealTabs() {
+    if (!el.tabs) return;
+    el.tabs.classList.add('is-shown');
+    if (tabTimer) clearTimeout(tabTimer);
+    tabTimer = setTimeout(function () {
+      tabTimer = 0;
+      el.tabs.classList.remove('is-shown');
+    }, 1500);
+  }
+
+  function hideTabs() {
+    if (tabTimer) clearTimeout(tabTimer);
+    tabTimer = 0;
+    if (el.tabs) el.tabs.classList.remove('is-shown');
+  }
+
+  function askConfirm(message, onOk) {
+    if (!el.ask) return;
+    askHandler = onOk;
+    if (el.askText) el.askText.textContent = message;
+    el.ask.hidden = false;
+  }
+
+  function closeAsk() {
+    askHandler = null;
+    if (el.ask) el.ask.hidden = true;
+  }
+
+  function bindChromeMotion() {
+    document.addEventListener('touchstart', function (ev) {
+      if (ev.touches && ev.touches[0]) gestureY = ev.touches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchmove', function (ev) {
+      if (!ev.touches || !ev.touches[0]) return;
+      var y = ev.touches[0].clientY;
+      if (Math.abs(y - gestureY) > 12) revealTabs();
+      gestureY = y;
+    }, { passive: true });
+    document.addEventListener('wheel', function (ev) {
+      if (ev.deltaY) revealTabs();
+    }, { passive: true });
+    document.addEventListener('scroll', function () {
+      revealTabs();
+    }, true);
+
+    if (el.askCancel) el.askCancel.addEventListener('click', closeAsk);
+    if (el.askBackdrop) el.askBackdrop.addEventListener('click', closeAsk);
+    if (el.askOk) {
+      el.askOk.addEventListener('click', function () {
+        var fn = askHandler;
+        closeAsk();
+        if (fn) fn();
+      });
+    }
+  }
+
   function init() {
     bind();
+    bindChromeMotion();
     showView('import');
     refreshLibrary().catch(function () {});
   }
