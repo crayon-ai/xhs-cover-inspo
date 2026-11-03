@@ -891,16 +891,20 @@
     return btn;
   }
 
+  function passesCategoryFilter(item) {
+    var filter = state.categoryFilter || '';
+    if (!filter) return true;
+    if (state.sheetId && item && item.id === state.sheetId) return true;
+    return recordCategory(item) === filter;
+  }
+
   function renderLibrary() {
     var names = sortedCategoryNames(false);
     if (state.categoryFilter && names.indexOf(state.categoryFilter) === -1) {
-      state.categoryFilter = '';
+      names.push(state.categoryFilter);
     }
     var filter = state.categoryFilter || '';
-    var list = (state.library || []).filter(function (item) {
-      if (!filter) return true;
-      return recordCategory(item) === filter;
-    });
+    var list = (state.library || []).filter(passesCategoryFilter);
 
     if (el.catBar) {
       var keepScroll = el.catBar.scrollLeft || 0;
@@ -977,11 +981,115 @@
     return tags.join('、');
   }
 
+  function libraryItemById(id) {
+    var list = state.library || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === id) return list[i];
+    }
+    return null;
+  }
+
   function closeLibrarySheet() {
+    var id = state.sheetId;
+    var dropFromFilter = false;
+    if (id && state.categoryFilter) {
+      var openItem = libraryItemById(id);
+      if (openItem && recordCategory(openItem) !== state.categoryFilter) dropFromFilter = true;
+    }
     state.sheetId = null;
     if (el.sheetPanel) el.sheetPanel.style.transform = '';
     if (el.sheetCover) el.sheetCover.innerHTML = '';
     if (el.libSheet) el.libSheet.hidden = true;
+    if (dropFromFilter) renderLibrary();
+  }
+
+  function sheetCategoryNames() {
+    var names = sortedCategoryNames(true);
+    if (names.indexOf(UNCATEGORIZED) === -1) names.push(UNCATEGORIZED);
+    return names;
+  }
+
+  function fillSheetFields(item) {
+    if (!el.sheetFields || !item) return;
+    el.sheetFields.innerHTML = '';
+    sheetAddField(el.sheetFields, '为何想点', item.whyClick);
+    sheetAddField(el.sheetFields, '感觉', item.feeling);
+    sheetAddField(el.sheetFields, '结构亮点', item.structure);
+    sheetAddField(el.sheetFields, '画面可学点', item.learnable);
+
+    var row = document.createElement('div');
+    row.className = 'sheet-row sheet-row--cat';
+    var k = document.createElement('p');
+    k.className = 'sheet-k';
+    k.textContent = '分类';
+    var chips = document.createElement('div');
+    chips.className = 'sheet-cat-chips';
+    var current = recordCategory(item);
+    sheetCategoryNames().forEach(function (name) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cat-chip' + (current === name ? ' is-active' : '');
+      b.textContent = name;
+      b.setAttribute('aria-pressed', current === name ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        saveSheetCategory(item, name);
+      });
+      chips.appendChild(b);
+    });
+    var add = document.createElement('div');
+    add.className = 'sheet-cat-add';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.maxLength = 20;
+    input.placeholder = '新分类';
+    input.setAttribute('aria-label', '新分类');
+    input.autocomplete = 'off';
+    var addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.textContent = '添加';
+    function addSheetCategory() {
+      var name = normalizeCategoryName(input.value);
+      if (!name) return;
+      input.value = '';
+      rememberCategory(name);
+      saveSheetCategory(item, name);
+    }
+    addBtn.addEventListener('click', addSheetCategory);
+    input.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        addSheetCategory();
+      }
+    });
+    add.appendChild(input);
+    add.appendChild(addBtn);
+    row.appendChild(k);
+    row.appendChild(chips);
+    row.appendChild(add);
+    el.sheetFields.appendChild(row);
+
+    sheetAddField(el.sheetFields, '标签', tagsLine(item));
+    sheetAddField(el.sheetFields, '保存', formatSavedAt(item.createdAt));
+  }
+
+  function saveSheetCategory(item, name) {
+    if (!item || !name || recordCategory(item) === name) return;
+    var prev = item.category;
+    item.category = name;
+    openDb().then(function (db) {
+      return idbPut(db, item).then(function () {
+        db.close();
+        var fresh = libraryItemById(item.id) || item;
+        fresh.category = name;
+        renderLibrary();
+        if (state.sheetId === item.id && el.libSheet && !el.libSheet.hidden) {
+          fillSheetFields(fresh);
+        }
+      });
+    }).catch(function () {
+      item.category = prev;
+      alert('保存失败');
+    });
   }
 
   function fitSheetCanvas(canvas) {
@@ -1014,16 +1122,7 @@
         }).catch(function () {});
       }
     }
-    if (el.sheetFields) {
-      el.sheetFields.innerHTML = '';
-      sheetAddField(el.sheetFields, '为何想点', item.whyClick);
-      sheetAddField(el.sheetFields, '感觉', item.feeling);
-      sheetAddField(el.sheetFields, '结构亮点', item.structure);
-      sheetAddField(el.sheetFields, '画面可学点', item.learnable);
-      sheetAddField(el.sheetFields, '分类', recordCategory(item));
-      sheetAddField(el.sheetFields, '标签', tagsLine(item));
-      sheetAddField(el.sheetFields, '保存', formatSavedAt(item.createdAt));
-    }
+    fillSheetFields(item);
     el.libSheet.hidden = false;
   }
 
