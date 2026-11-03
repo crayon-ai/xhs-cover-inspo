@@ -7,13 +7,12 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
+  <nav class="tabs" id="tabs" aria-label="主导航" hidden>
+    <button type="button" class="tab is-active" data-view="import"><span>导入</span></button>
+    <button type="button" class="tab" data-view="library"><span>灵感库</span></button>
+    <button type="button" class="tab" data-view="export"><span>提示词</span></button>
+  </nav>
   <div id="app">
-    <nav class="tabs" id="tabs" aria-label="主导航">
-      <button type="button" class="tab is-active" data-view="import"><span>导入</span></button>
-      <button type="button" class="tab" data-view="library"><span>灵感库</span></button>
-      <button type="button" class="tab" data-view="export"><span>提示词</span></button>
-    </nav>
-
     <main>
       <!-- 导入 · ★B 柔光舞台 + 微堆 + Soft Breath 波纹 -->
       <section id="view-import" class="view is-visible">

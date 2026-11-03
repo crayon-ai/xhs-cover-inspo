@@ -1535,18 +1535,31 @@
 
   function revealTabs() {
     if (!el.tabs) return;
-    el.tabs.classList.add('is-shown');
     if (tabTimer) clearTimeout(tabTimer);
+    el.tabs.hidden = false;
+    if (window.requestAnimationFrame) {
+      window.requestAnimationFrame(function () {
+        if (el.tabs) el.tabs.classList.add('is-shown');
+      });
+    } else {
+      el.tabs.classList.add('is-shown');
+    }
     tabTimer = setTimeout(function () {
       tabTimer = 0;
+      if (!el.tabs) return;
       el.tabs.classList.remove('is-shown');
+      setTimeout(function () {
+        if (el.tabs && !el.tabs.classList.contains('is-shown')) el.tabs.hidden = true;
+      }, 220);
     }, 1500);
   }
 
   function hideTabs() {
     if (tabTimer) clearTimeout(tabTimer);
     tabTimer = 0;
-    if (el.tabs) el.tabs.classList.remove('is-shown');
+    if (!el.tabs) return;
+    el.tabs.classList.remove('is-shown');
+    el.tabs.hidden = true;
   }
 
   function askConfirm(message, onOk) {
@@ -1561,22 +1574,31 @@
     if (el.ask) el.ask.hidden = true;
   }
 
+  function bindScrollReveal(node) {
+    if (!node || node.__xhsTabBound) return;
+    node.__xhsTabBound = true;
+    node.addEventListener('scroll', revealTabs, false);
+    node.addEventListener('touchmove', function (ev) {
+      if (!ev.touches || !ev.touches[0]) return;
+      var y = ev.touches[0].clientY;
+      if (Math.abs(y - gestureY) > 10) revealTabs();
+      gestureY = y;
+    }, false);
+    node.addEventListener('wheel', function (ev) {
+      if (ev.deltaY) revealTabs();
+    }, false);
+  }
+
   function bindChromeMotion() {
     document.addEventListener('touchstart', function (ev) {
       if (ev.touches && ev.touches[0]) gestureY = ev.touches[0].clientY;
-    }, { passive: true });
-    document.addEventListener('touchmove', function (ev) {
-      if (!ev.touches || !ev.touches[0]) return;
-      var y = ev.touches[0].clientY;
-      if (Math.abs(y - gestureY) > 12) revealTabs();
-      gestureY = y;
-    }, { passive: true });
-    document.addEventListener('wheel', function (ev) {
-      if (ev.deltaY) revealTabs();
-    }, { passive: true });
-    document.addEventListener('scroll', function () {
-      revealTabs();
-    }, true);
+    }, false);
+    bindScrollReveal(window);
+    bindScrollReveal(document);
+    bindScrollReveal(document.body);
+    bindScrollReveal(document.getElementById('app'));
+    bindScrollReveal(document.getElementById('lib-scroll'));
+    bindScrollReveal(document.getElementById('pick-rail'));
 
     if (el.askCancel) el.askCancel.addEventListener('click', closeAsk);
     if (el.askBackdrop) el.askBackdrop.addEventListener('click', closeAsk);

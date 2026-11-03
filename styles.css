@@ -136,28 +136,20 @@ html.is-import body {
   color: rgba(255, 255, 255, 0.38);
 }
 
-#app.is-dark-chrome .tabs,
-#app.is-import .tabs,
-#app.is-library .tabs {
+html.is-dark-chrome .tabs {
   border-bottom-color: rgba(255, 255, 255, 0.12);
-  background: rgba(10, 10, 10, 0.78);
+  background: rgba(10, 10, 10, 0.88);
 }
 
-#app.is-dark-chrome .tab,
-#app.is-import .tab,
-#app.is-library .tab {
-  color: rgba(255, 255, 255, 0.42);
+html.is-dark-chrome .tab {
+  color: rgba(255, 255, 255, 0.55);
 }
 
-#app.is-dark-chrome .tab.is-active,
-#app.is-import .tab.is-active,
-#app.is-library .tab.is-active {
+html.is-dark-chrome .tab.is-active {
   color: #ffffff;
 }
 
-#app.is-dark-chrome .tab.is-active::after,
-#app.is-import .tab.is-active::after,
-#app.is-library .tab.is-active::after {
+html.is-dark-chrome .tab.is-active::after {
   background: #ffffff;
 }
 
@@ -196,7 +188,7 @@ html.is-library body {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding-top: calc(6px + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
   padding-right: max(20px, env(safe-area-inset-right, 0px));
   padding-bottom: 0;
   padding-left: max(20px, env(safe-area-inset-left, 0px));
@@ -225,32 +217,36 @@ html.is-library body {
 /* ——— Tabs · underline / near-black ——— */
 .tabs {
   position: fixed;
-  z-index: 35;
+  z-index: 80;
   top: 0;
-  left: 50%;
-  width: min(480px, 100%);
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0;
-  margin: 0;
   padding: calc(4px + env(safe-area-inset-top, 0px)) 8px 8px;
   border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0;
-  background: rgba(10, 10, 10, 0.78);
+  background: rgba(10, 10, 10, 0.92);
   box-shadow: none;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  visibility: hidden;
   opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, -10px);
-  transition: opacity var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
+  -webkit-transform: translateY(-110%);
+  transform: translateY(-110%);
+  transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out), visibility 200ms var(--ease-out);
 }
 
 .tabs.is-shown {
+  visibility: visible;
   opacity: 1;
   pointer-events: auto;
-  transform: translate(-50%, 0);
+  -webkit-transform: translateY(0);
+  transform: translateY(0);
 }
 
 .tab {
@@ -1160,9 +1156,17 @@ html.is-library body {
   line-height: 1.2;
 }
 
+#app.is-library .lib-stage,
+#app.is-library .lib-scroll {
+  margin-top: 0;
+  padding-top: 0;
+}
+
 .lib-scroll {
   flex: 1 1 auto;
   min-height: 0;
+  margin: 0;
+  padding: 0;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
