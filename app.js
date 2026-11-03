@@ -1251,6 +1251,64 @@
 
   var exportItems = [];
   var exportFocusRaf = 0;
+  var copyBtnTimer = 0;
+
+  function fitExportCanvas(canvas, tries) {
+    var nw = canvas.width;
+    var nh = canvas.height;
+    var slide = canvas.parentNode;
+    if (!nw || !nh || !slide) return;
+    var maxW = slide.clientWidth;
+    var maxH = slide.clientHeight;
+    if (!maxW || !maxH) {
+      if ((tries || 0) < 8 && window.requestAnimationFrame) {
+        window.requestAnimationFrame(function () { fitExportCanvas(canvas, (tries || 0) + 1); });
+      }
+      return;
+    }
+    var scale = Math.min(maxW / nw, maxH / nh);
+    canvas.style.width = Math.max(1, Math.round(nw * scale)) + 'px';
+    canvas.style.height = Math.max(1, Math.round(nh * scale)) + 'px';
+  }
+
+  function resetCopyButton() {
+    if (copyBtnTimer) clearTimeout(copyBtnTimer);
+    copyBtnTimer = 0;
+    if (el.btnBuildExport) el.btnBuildExport.textContent = '复制提示词';
+  }
+
+  function selectExportCopy() {
+    var node = el.exportCopy;
+    if (!node || !window.getSelection) return;
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    var range = document.createRange();
+    range.selectNodeContents(node);
+    sel.addRange(range);
+  }
+
+  function flashCopyButton() {
+    if (!el.btnBuildExport) return;
+    el.btnBuildExport.textContent = '长按复制';
+    if (copyBtnTimer) clearTimeout(copyBtnTimer);
+    copyBtnTimer = setTimeout(function () {
+      copyBtnTimer = 0;
+      if (el.btnBuildExport) el.btnBuildExport.textContent = '复制提示词';
+    }, 1600);
+  }
+
+  function prepareCopyPrompt() {
+    var after = function () {
+      if (!exportItems.length || !el.exportCopy) return;
+      selectExportCopy();
+      flashCopyButton();
+    };
+    if (!exportItems.length) {
+      renderExport().then(after);
+      return;
+    }
+    after();
+  }
 
   function exportCenterIndex(rail) {
     var slides = rail.querySelectorAll('.export-slide');
@@ -1302,6 +1360,7 @@
     board.classList.remove('empty');
     exportItems = [];
     el.exportCopy = null;
+    resetCopyButton();
     if (!state.library.length) {
       await refreshLibrary();
     }
@@ -1320,13 +1379,15 @@
     rail.setAttribute('aria-label', '封面');
     var sheet = document.createElement('div');
     sheet.className = 'export-sheet';
-    var pre = document.createElement('pre');
-    pre.className = 'export-copy';
-    pre.textContent = buildPromptText(list[0]);
-    el.exportCopy = pre;
-    sheet.appendChild(pre);
     var dots = document.createElement('div');
     dots.className = 'export-dots' + (list.length < 2 ? ' is-hidden' : '');
+    var pre = document.createElement('pre');
+    pre.className = 'export-copy';
+    pre.tabIndex = -1;
+    pre.textContent = buildPromptText(list[0]);
+    el.exportCopy = pre;
+    sheet.appendChild(dots);
+    sheet.appendChild(pre);
 
     for (var i = 0; i < list.length; i++) {
       (function (index) {
@@ -1361,7 +1422,9 @@
           });
           dots.appendChild(dot);
         }
-        paintBlobToCanvas(list[index].imageBlob, canvas).catch(function () {});
+        paintBlobToCanvas(list[index].imageBlob, canvas).then(function () {
+          fitExportCanvas(canvas);
+        }).catch(function () {});
       })(i);
     }
 
@@ -1378,7 +1441,6 @@
     }, false);
 
     hero.appendChild(rail);
-    hero.appendChild(dots);
     hero.appendChild(sheet);
     board.appendChild(hero);
     if (typeof bindScrollReveal === 'function') {
@@ -1625,7 +1687,7 @@
     });
 
     el.btnBuildExport.addEventListener('click', function () {
-      renderExport();
+      prepareCopyPrompt();
     });
   }
 
