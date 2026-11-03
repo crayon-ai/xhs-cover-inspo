@@ -1249,41 +1249,141 @@
     return lines.join('\n');
   }
 
+  var exportItems = [];
+  var exportFocusRaf = 0;
+
+  function exportCenterIndex(rail) {
+    var slides = rail.querySelectorAll('.export-slide');
+    if (!slides.length) return 0;
+    var mid = rail.getBoundingClientRect().left + rail.clientWidth / 2;
+    var best = 0;
+    var bestDist = Infinity;
+    for (var i = 0; i < slides.length; i++) {
+      var r = slides[i].getBoundingClientRect();
+      var c = (r.left + r.right) / 2;
+      var d = Math.abs(c - mid);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  function syncExportFocus(rail) {
+    if (!rail) return;
+    var i = exportCenterIndex(rail);
+    if (el.exportCopy && exportItems[i]) {
+      el.exportCopy.textContent = buildPromptText(exportItems[i]);
+    }
+    var dots = rail.parentNode ? rail.parentNode.querySelectorAll('.export-dot') : [];
+    for (var d = 0; d < dots.length; d++) {
+      dots[d].classList.toggle('is-on', d === i);
+    }
+  }
+
+  function scrollExportTo(rail, index) {
+    var slides = rail.querySelectorAll('.export-slide');
+    if (!slides.length) return;
+    var i = index;
+    if (i < 0) i = slides.length - 1;
+    if (i >= slides.length) i = 0;
+    if (slides[i].scrollIntoView) {
+      slides[i].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    } else {
+      rail.scrollLeft = slides[i].offsetLeft;
+    }
+    syncExportFocus(rail);
+  }
+
   async function renderExport() {
     var board = el.exportBoard;
     board.innerHTML = '';
     board.classList.remove('empty');
+    exportItems = [];
+    el.exportCopy = null;
     if (!state.library.length) {
       await refreshLibrary();
     }
     var list = state.library;
     if (!list.length) {
       board.classList.add('empty');
-      board.textContent = '空';
+      board.textContent = '';
       return;
     }
 
-    var title = document.createElement('p');
-    title.className = 'export-count';
-    title.textContent = list.length + ' 条';
-    board.appendChild(title);
+    exportItems = list.slice();
+    var hero = document.createElement('div');
+    hero.className = 'export-hero';
+    var rail = document.createElement('div');
+    rail.className = 'export-rail';
+    rail.setAttribute('aria-label', '封面');
+    var sheet = document.createElement('div');
+    sheet.className = 'export-sheet';
+    var pre = document.createElement('pre');
+    pre.className = 'export-copy';
+    pre.textContent = buildPromptText(list[0]);
+    el.exportCopy = pre;
+    sheet.appendChild(pre);
+    var dots = document.createElement('div');
+    dots.className = 'export-dots' + (list.length < 2 ? ' is-hidden' : '');
 
     for (var i = 0; i < list.length; i++) {
-      var item = list[i];
-      var block = document.createElement('div');
-      block.className = 'export-item';
-      var imgWrap = document.createElement('div');
-      imgWrap.className = 'ex-img';
-      var canvas = document.createElement('canvas');
-      imgWrap.appendChild(canvas);
-      var pre = document.createElement('pre');
-      pre.textContent = buildPromptText(item);
-      block.appendChild(imgWrap);
-      block.appendChild(pre);
-      board.appendChild(block);
-      if (item.imageBlob) {
-        await paintBlobToCanvas(item.imageBlob, canvas).catch(function () {});
+      (function (index) {
+        var slide = document.createElement('button');
+        slide.type = 'button';
+        slide.className = 'export-slide';
+        slide.setAttribute('aria-label', '封面');
+        var canvas = document.createElement('canvas');
+        slide.appendChild(canvas);
+        rail.appendChild(slide);
+        var originX = 0;
+        var moved = false;
+        slide.addEventListener('pointerdown', function (ev) {
+          originX = ev.clientX;
+          moved = false;
+        });
+        slide.addEventListener('pointermove', function (ev) {
+          if (Math.abs(ev.clientX - originX) > 8) moved = true;
+        });
+        slide.addEventListener('click', function () {
+          if (moved || list.length < 2) return;
+          var current = exportCenterIndex(rail);
+          scrollExportTo(rail, current === index ? index + 1 : index);
+        });
+        if (list.length > 1) {
+          var dot = document.createElement('button');
+          dot.type = 'button';
+          dot.className = 'export-dot' + (index === 0 ? ' is-on' : '');
+          dot.setAttribute('aria-label', String(index + 1));
+          dot.addEventListener('click', function () {
+            scrollExportTo(rail, index);
+          });
+          dots.appendChild(dot);
+        }
+        paintBlobToCanvas(list[index].imageBlob, canvas).catch(function () {});
+      })(i);
+    }
+
+    rail.addEventListener('scroll', function () {
+      if (exportFocusRaf) return;
+      if (window.requestAnimationFrame) {
+        exportFocusRaf = window.requestAnimationFrame(function () {
+          exportFocusRaf = 0;
+          syncExportFocus(rail);
+        });
+      } else {
+        syncExportFocus(rail);
       }
+    }, false);
+
+    hero.appendChild(rail);
+    hero.appendChild(dots);
+    hero.appendChild(sheet);
+    board.appendChild(hero);
+    if (typeof bindScrollReveal === 'function') {
+      bindScrollReveal(rail);
+      bindScrollReveal(sheet);
     }
   }
 
