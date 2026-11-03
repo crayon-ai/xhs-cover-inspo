@@ -10,7 +10,6 @@
   <nav class="tabs" id="tabs" aria-label="主导航" hidden>
     <button type="button" class="tab is-active" data-view="import"><span>导入</span></button>
     <button type="button" class="tab" data-view="library"><span>灵感库</span></button>
-    <button type="button" class="tab" data-view="export"><span>提示词</span></button>
   </nav>
   <div id="app">
     <main>
@@ -43,8 +42,8 @@
             </div>
             <p id="pick-pager" class="cand-pager is-hidden" aria-live="polite"></p>
             <div class="import-actions">
-              <button type="button" id="btn-note" class="btn primary" disabled>记笔记</button>
-              <label class="btn ghost import-repick" for="file-input">换一张</label>
+              <button type="button" id="btn-note" class="btn primary" disabled>收藏</button>
+              <button type="button" id="btn-repick" class="btn ghost import-repick">换一张</button>
             </div>
           </div>
         </div>
@@ -102,13 +101,6 @@
         </div>
       </section>
 
-      <!-- 提示词 -->
-      <section id="view-export" class="view">
-        <div class="export-stage">
-          <div id="export-board" class="export-board empty"></div>
-          <button type="button" id="btn-build-export" class="btn primary">复制提示词</button>
-        </div>
-      </section>
     </main>
 
   </div>
