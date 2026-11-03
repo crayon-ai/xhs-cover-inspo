@@ -733,13 +733,14 @@
 
   function recordCategory(item) {
     var explicit = item && item.category ? String(item.category).trim() : '';
+    if (explicit === UNCATEGORIZED) explicit = '';
     if (explicit) return explicit;
     var tags = item && item.tags ? item.tags : [];
     if (tags.length) {
       var first = String(tags[0] || '').trim();
-      if (first) return first;
+      if (first && first !== UNCATEGORIZED) return first;
     }
-    return UNCATEGORIZED;
+    return '';
   }
 
   function categoryCounts() {
@@ -756,9 +757,9 @@
     (state.extraCategories || []).forEach(function (name) {
       if (includeEmpty && name && counts[name] == null) counts[name] = 0;
     });
-    return Object.keys(counts).sort(function (a, b) {
-      if (a === UNCATEGORIZED) return 1;
-      if (b === UNCATEGORIZED) return -1;
+    return Object.keys(counts).filter(function (name) {
+      return name && name !== UNCATEGORIZED;
+    }).sort(function (a, b) {
       if (counts[b] !== counts[a]) return counts[b] - counts[a];
       return a < b ? -1 : a > b ? 1 : 0;
     });
@@ -774,7 +775,7 @@
 
   function normalizeCategoryName(raw) {
     var name = String(raw || '').trim().replace(/\s+/g, ' ');
-    if (!name || name === '全部') return '';
+    if (!name || name === '全部' || name === UNCATEGORIZED) return '';
     if (name.length > 20) name = name.slice(0, 20);
     return name;
   }
@@ -798,7 +799,6 @@
     if (!el.noteCatChips) return;
     var selected = (state.noteCategory || '').trim();
     var names = sortedCategoryNames(true);
-    if (names.indexOf(UNCATEGORIZED) === -1) names.push(UNCATEGORIZED);
     el.noteCatChips.innerHTML = '';
     names.forEach(function (name) {
       var b = document.createElement('button');
@@ -833,10 +833,22 @@
     }
     var label = recordCategory(item);
     if (item.feeling) label += '，' + item.feeling;
-    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-label', label || '封面');
     var canvas = document.createElement('canvas');
     btn.appendChild(canvas);
+    var originX = 0;
+    var originY = 0;
+    var moved = false;
+    btn.addEventListener('pointerdown', function (ev) {
+      originX = ev.clientX;
+      originY = ev.clientY;
+      moved = false;
+    });
+    btn.addEventListener('pointermove', function (ev) {
+      if (Math.abs(ev.clientX - originX) > 8 || Math.abs(ev.clientY - originY) > 8) moved = true;
+    });
     btn.addEventListener('click', function () {
+      if (moved) return;
       openLibrarySheet(item);
     });
     if (item.imageBlob) {
@@ -919,9 +931,7 @@
     el.libraryRows.innerHTML = '';
     var names = sortedCategoryNames(false);
     var sections = [];
-    if (names.length > 1) {
-      sections.push({ name: '', title: '最近收藏', items: state.library || [] });
-    }
+    sections.push({ name: '', title: '最近收藏', items: state.library || [] });
     names.forEach(function (name) {
       sections.push({
         name: name,
@@ -1032,7 +1042,8 @@
 
   function paintSheetChips() {
     if (!el.sheetChips || !state.sheetDraft) return;
-    var current = sheetNorm(state.sheetDraft.category) || UNCATEGORIZED;
+    var current = sheetNorm(state.sheetDraft.category);
+    if (current === UNCATEGORIZED) current = '';
     el.sheetChips.innerHTML = '';
     sheetCategoryOptions().forEach(function (name) {
       var b = document.createElement('button');
@@ -1069,9 +1080,9 @@
   }
 
   function sheetCategoryNames() {
-    var names = sortedCategoryNames(true);
-    if (names.indexOf(UNCATEGORIZED) === -1) names.push(UNCATEGORIZED);
-    return names;
+    return sortedCategoryNames(true).filter(function (name) {
+      return name && name !== UNCATEGORIZED;
+    });
   }
 
   function fillSheetFields(item) {

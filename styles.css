@@ -1177,6 +1177,7 @@ html.is-library body {
   cursor: pointer;
   font: inherit;
   text-align: left;
+  touch-action: pan-x pan-y;
   transition: transform 140ms var(--ease-out);
 }
 
@@ -1320,7 +1321,8 @@ html.is-library body {
   scroll-padding-left: 12px;
   padding: 2px 12px 6px;
   overscroll-behavior-x: contain;
-  touch-action: pan-x;
+  overscroll-behavior-y: auto;
+  touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   min-height: calc(var(--lib-row-h) + 8px);
