@@ -18,7 +18,6 @@
     noteQueue: [],
     noteIndex: 0,
     library: [],
-    categoryFilter: '',
     noteCategory: '',
     extraCategories: [],
     sheetId: null,
@@ -823,10 +822,15 @@
     return 4 / 3;
   }
 
-  function makeLibraryCard(item) {
+  function makeLibraryCard(item, extraClass) {
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'lib-card';
+    btn.className = 'lib-card' + (extraClass ? ' ' + extraClass : '');
+    if (extraClass === 'lib-row-card') {
+      var w = item && item.width ? item.width : 0;
+      var h = item && item.height ? item.height : 0;
+      btn.style.aspectRatio = (w > 0 && h > 0) ? (w + ' / ' + h) : '3 / 4';
+    }
     var label = recordCategory(item);
     if (item.feeling) label += '，' + item.feeling;
     btn.setAttribute('aria-label', label);
@@ -841,68 +845,96 @@
     return btn;
   }
 
-  function passesCategoryFilter(item) {
-    var filter = state.categoryFilter || '';
-    if (!filter) return true;
-    if (state.sheetId && item && item.id === state.sheetId) return true;
-    return recordCategory(item) === filter;
-  }
-
   function renderLibrary() {
-    var names = sortedCategoryNames(false);
-    if (state.categoryFilter && names.indexOf(state.categoryFilter) === -1) {
-      names.push(state.categoryFilter);
-    }
-    var filter = state.categoryFilter || '';
-    var list = (state.library || []).filter(passesCategoryFilter);
-
-    if (el.catBar) {
-      var keepScroll = el.catBar.scrollLeft || 0;
-      el.catBar.innerHTML = '';
-      var options = [''].concat(names);
-      options.forEach(function (name) {
-        var label = name || '全部';
-        var active = filter === name;
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'cat-chip' + (active ? ' is-active' : '');
-        b.textContent = label;
-        b.setAttribute('role', 'tab');
-        b.setAttribute('aria-selected', active ? 'true' : 'false');
-        b.addEventListener('click', function () {
-          state.categoryFilter = name;
-          renderLibrary();
-          if (el.libScroll) el.libScroll.scrollTop = 0;
-        });
-        el.catBar.appendChild(b);
-      });
-      el.catBar.scrollLeft = keepScroll;
-    }
-
-    if (el.btnClearAll) el.btnClearAll.hidden = !(state.library && state.library.length);
-
-    var box = el.libraryList;
-    if (!box) return;
-    box.innerHTML = '';
-    var empty = !list.length;
-    box.hidden = empty;
+    var isEmpty = !(state.library && state.library.length);
+    if (el.libraryRows) el.libraryRows.hidden = isEmpty;
     if (el.libraryEmpty) {
-      el.libraryEmpty.hidden = !empty;
+      el.libraryEmpty.hidden = !isEmpty;
       el.libraryEmpty.textContent = '空';
     }
-    if (empty) return;
+    if (el.btnClearAll) el.btnClearAll.hidden = isEmpty;
+    if (isEmpty) return;
+    renderLibraryRows();
+  }
 
-    var cols = [document.createElement('div'), document.createElement('div')];
-    var heights = [0, 0];
-    cols[0].className = 'lib-col';
-    cols[1].className = 'lib-col';
-    list.forEach(function (item) {
-      var side = heights[0] <= heights[1] ? 0 : 1;
-      heights[side] += coverRatio(item);
-      cols[side].appendChild(makeLibraryCard(item));
+  function buildLibRow(sec) {
+    var row = document.createElement('section');
+    row.className = 'lib-row';
+    var head = document.createElement('div');
+    head.className = 'lib-row-head';
+    var title = document.createElement('span');
+    title.className = 'lib-row-title';
+    title.textContent = sec.title;
+    head.appendChild(title);
+    var count = document.createElement('span');
+    count.className = 'lib-row-count';
+    count.textContent = sec.items.length;
+    head.appendChild(count);
+    row.appendChild(head);
+    var track = document.createElement('div');
+    track.className = 'lib-row-track';
+    row.appendChild(track);
+    row.__items = sec.items;
+    row.__rendered = false;
+    return row;
+  }
+
+  function renderLibRowItems(row) {
+    if (!row || row.__rendered) return;
+    row.__rendered = true;
+    var track = row.querySelector('.lib-row-track');
+    if (!track) return;
+    (row.__items || []).forEach(function (item) {
+      track.appendChild(makeLibraryCard(item, 'lib-row-card'));
     });
-    box.appendChild(cols[0]);
-    box.appendChild(cols[1]);
+  }
+
+  var libRowObserver = null;
+
+  function observeLibRows() {
+    if (!el.libraryRows) return;
+    if (libRowObserver) {
+      libRowObserver.disconnect();
+      libRowObserver = null;
+    }
+    var rows = qsAll('.lib-row', el.libraryRows);
+    if (typeof IntersectionObserver !== 'function') {
+      rows.forEach(renderLibRowItems);
+      return;
+    }
+    libRowObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        renderLibRowItems(en.target);
+        if (libRowObserver) libRowObserver.unobserve(en.target);
+      });
+    }, { root: el.libScroll || null, rootMargin: '120% 0px' });
+    rows.forEach(function (r) {
+      libRowObserver.observe(r);
+    });
+  }
+
+  function renderLibraryRows() {
+    if (!el.libraryRows) return;
+    el.libraryRows.innerHTML = '';
+    var names = sortedCategoryNames(false);
+    var sections = [];
+    if (names.length > 1) {
+      sections.push({ name: '', title: '最近收藏', items: state.library || [] });
+    }
+    names.forEach(function (name) {
+      sections.push({
+        name: name,
+        title: name,
+        items: (state.library || []).filter(function (it) {
+          return recordCategory(it) === name;
+        })
+      });
+    });
+    sections.forEach(function (sec) {
+      el.libraryRows.appendChild(buildLibRow(sec));
+    });
+    observeLibRows();
   }
 
   function sheetAddField(parent, label, value) {
@@ -940,12 +972,6 @@
   }
 
   function closeLibrarySheet() {
-    var id = state.sheetId;
-    var dropFromFilter = false;
-    if (id && state.categoryFilter) {
-      var openItem = libraryItemById(id);
-      if (openItem && recordCategory(openItem) !== state.categoryFilter) dropFromFilter = true;
-    }
     state.sheetId = null;
     state.sheetBase = null;
     state.sheetDraft = null;
@@ -955,7 +981,6 @@
     if (el.sheetPanel) el.sheetPanel.style.transform = '';
     if (el.sheetCover) el.sheetCover.innerHTML = '';
     if (el.libSheet) el.libSheet.hidden = true;
-    if (dropFromFilter) renderLibrary();
   }
 
   function sheetSnapshot(item) {
@@ -1296,10 +1321,9 @@
     el.tagPreview = $('tag-preview');
     el.noteProgress = $('note-progress');
     el.btnNoteSkip = $('btn-note-skip');
-    el.libraryList = $('library-list');
+    el.libraryRows = $('library-rows');
     el.libraryEmpty = $('library-empty');
     el.libScroll = $('lib-scroll');
-    el.catBar = $('cat-bar');
     el.noteCatChips = $('note-cat-chips');
     el.fieldNewCat = $('field-new-cat');
     el.btnAddCat = $('btn-add-cat');
@@ -1451,7 +1475,6 @@
         openDb().then(function (db) {
           return idbClear(db).then(function () {
             db.close();
-            state.categoryFilter = '';
             closeLibrarySheet();
             return refreshLibrary();
           });

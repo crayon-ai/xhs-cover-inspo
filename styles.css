@@ -1124,7 +1124,7 @@ html.is-library body {
   border-color: var(--line);
 }
 
-/* ——— Library · near-black two-column gallery ——— */
+/* ——— Library · near-black category rows ——— */
 .lib-stage {
   flex: 1 1 auto;
   min-height: 0;
@@ -1161,21 +1161,6 @@ html.is-library body {
 }
 
 .lib-scroll::-webkit-scrollbar { display: none; }
-
-.library-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  align-items: start;
-  padding: 10px 0 6px;
-}
-
-.lib-col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
 
 .lib-card {
   display: block;
@@ -1228,29 +1213,12 @@ html.is-library body {
   flex: none;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
-  padding: 6px 0 6px;
+  padding: 6px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: #0a0a0a;
 }
-
-.cat-bar {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  scroll-padding-inline: 2px;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  padding: 2px 0;
-}
-
-.cat-bar::-webkit-scrollbar { display: none; }
 
 .cat-chip {
   flex: 0 0 auto;
@@ -1298,6 +1266,84 @@ html.is-library body {
 }
 
 .lib-clear:active { color: rgba(255, 255, 255, 0.6); }
+
+/* ——— Library · category rows（分类横滑浏览）——— */
+.lib-stage {
+  --lib-row-h: clamp(150px, 46vw, 230px);
+}
+
+.lib-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  padding: 6px 0 6px;
+}
+
+/* display:flex 会盖过 hidden 属性，需显式声明 */
+.lib-rows[hidden] { display: none; }
+
+.lib-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+
+.lib-row-title {
+  font-size: 16px;
+  font-weight: 650;
+  color: #ffffff;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lib-row-count {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+}
+
+/* 横向轨道：吸附 + 右缘露出（与库 12px 内边距对齐） */
+.lib-row-track {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: 12px;
+  padding: 2px 12px 6px;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  min-height: calc(var(--lib-row-h) + 8px);
+}
+
+.lib-row-track::-webkit-scrollbar { display: none; }
+
+/* 行内卡片：统一行高、宽度随原比例、不裁切 */
+.lib-row-card {
+  flex: 0 0 auto;
+  height: var(--lib-row-h);
+  width: auto;
+  max-width: 78vw;
+  border-radius: 16px;
+  scroll-snap-align: start;
+}
+
+.lib-row-card canvas,
+.lib-row-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 
 /* ——— Cover detail sheet ——— */
 .lib-sheet {
