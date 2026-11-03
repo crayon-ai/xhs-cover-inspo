@@ -541,6 +541,146 @@ html.is-library body {
   opacity: 0;
 }
 
+/* Empty import: dashed viewfinder around the ring, one short line below.
+   Hidden once covers are on screen. */
+.import-finder {
+  position: absolute;
+  z-index: 1;
+  left: 8px;
+  right: 8px;
+  top: 9%;
+  height: 66%;
+  border-radius: 28px;
+  border: 1.5px dashed rgba(26, 26, 26, 0.18);
+  pointer-events: none;
+}
+
+.import-finder__tick {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 0 solid #1a1a1a;
+}
+
+.import-finder__tick--tl {
+  left: -1px;
+  top: -1px;
+  border-top-width: 1.5px;
+  border-left-width: 1.5px;
+  border-top-left-radius: 10px;
+}
+
+.import-finder__tick--tr {
+  right: -1px;
+  top: -1px;
+  border-top-width: 1.5px;
+  border-right-width: 1.5px;
+  border-top-right-radius: 10px;
+}
+
+.import-finder__tick--bl {
+  left: -1px;
+  bottom: -1px;
+  border-bottom-width: 1.5px;
+  border-left-width: 1.5px;
+  border-bottom-left-radius: 10px;
+}
+
+.import-finder__tick--br {
+  right: -1px;
+  bottom: -1px;
+  border-bottom-width: 1.5px;
+  border-right-width: 1.5px;
+  border-bottom-right-radius: 10px;
+}
+
+.import-finder-hint {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  top: calc(75% + 16px);
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: rgba(26, 26, 26, 0.42);
+  pointer-events: none;
+}
+
+.import-stage.is-pick .import-finder,
+.import-stage.is-pick .import-finder-hint {
+  display: none;
+}
+
+#app.is-import {
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+#app.is-import main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#app.is-import #view-import {
+  min-height: 0;
+  margin-left: -20px;
+  margin-right: -20px;
+}
+
+#app.is-import #view-import.is-visible {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+
+#app.is-import .import-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+#app.is-import .import-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  flex: none;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+#app.is-import .import-cluster {
+  position: absolute;
+  left: 50%;
+  top: calc(9% + 33%);
+  transform: translate(-50%, -50%);
+}
+
+#app.is-import .import-glow,
+#app.is-import .import-ripple {
+  top: calc(9% + 33%);
+}
+
+#app.is-import .pick-stage {
+  position: relative;
+  z-index: 3;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* Cluster: dim micro-stack + rainbow ring */
 .import-cluster {
   position: relative;
