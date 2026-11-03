@@ -95,7 +95,15 @@
             <label>画面可学点
               <textarea id="field-learn" rows="2" placeholder="光影、材质、字体对比、色块…"></textarea>
             </label>
-            <label>分类标签（逗号分隔）
+            <div class="note-cat">
+              <span class="note-cat__k" id="note-cat-label">分类</span>
+              <div id="note-cat-chips" class="note-cat-chips" role="listbox" aria-labelledby="note-cat-label"></div>
+              <div class="note-cat-add">
+                <input id="field-new-cat" type="text" maxlength="20" placeholder="新分类" autocomplete="off" aria-label="新分类" />
+                <button type="button" id="btn-add-cat">添加</button>
+              </div>
+            </div>
+            <label>标签
               <input id="field-tags" type="text" placeholder="美妆, 居家, 人物特写" />
             </label>
             <div id="tag-preview" class="chips tag-preview" aria-live="polite"></div>
@@ -108,20 +116,20 @@
         </div>
       </section>
 
-      <!-- 灵感库 -->
+      <!-- 灵感库 · 近黑双列 + 底部分类条 -->
       <section id="view-library" class="view">
-        <div class="card soft enter">
-          <div class="section-head">
+        <div class="lib-stage enter">
+          <div class="section-head lib-head">
             <h2>灵感库</h2>
           </div>
-          <div class="filter-row">
-            <input id="tag-filter" type="text" placeholder="筛选标签" />
-            <button type="button" id="btn-filter" class="btn ghost">筛选</button>
-            <button type="button" id="btn-filter-clear" class="btn ghost">全部</button>
+          <div class="lib-scroll" id="lib-scroll">
+            <div id="library-list" class="library-grid" aria-label="已保存封面"></div>
+            <p id="library-empty" class="lib-empty" hidden>还没有封面</p>
           </div>
-          <div id="tag-chips" class="chips"></div>
-          <div id="library-list" class="library-list"></div>
-          <button type="button" id="btn-clear-all" class="btn danger ghost">清空全部灵感</button>
+          <div class="lib-dock">
+            <div id="cat-bar" class="cat-bar" role="tablist" aria-label="分类"></div>
+            <button type="button" id="btn-clear-all" class="lib-clear">清空</button>
+          </div>
         </div>
       </section>
 
@@ -143,6 +151,18 @@
     <footer class="foot">
       <span>Crayon_ · 封面灵感 · 离线</span>
     </footer>
+
+  </div>
+
+  <div id="lib-sheet" class="lib-sheet" hidden>
+    <button type="button" id="lib-sheet-backdrop" class="lib-sheet__backdrop" aria-label="关闭"></button>
+    <div class="lib-sheet__panel" id="lib-sheet-panel" role="dialog" aria-modal="true" aria-label="封面笔记">
+      <div class="lib-sheet__handle" id="lib-sheet-handle" aria-hidden="true"></div>
+      <button type="button" id="lib-sheet-close" class="lib-sheet__close" aria-label="关闭">×</button>
+      <div class="lib-sheet__cover" id="lib-sheet-cover"></div>
+      <div class="lib-sheet__fields" id="lib-sheet-fields"></div>
+      <button type="button" id="lib-sheet-delete" class="lib-sheet__delete">删除</button>
+    </div>
   </div>
   <script src="./app.js"></script>
 </body>
