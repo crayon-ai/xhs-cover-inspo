@@ -19,6 +19,7 @@
     noteIndex: 0,
     library: [],
     categoryFilter: '',
+    libView: 'rows',
     noteCategory: '',
     extraCategories: [],
     sheetId: null,
@@ -846,10 +847,15 @@
     return 4 / 3;
   }
 
-  function makeLibraryCard(item) {
+  function makeLibraryCard(item, extraClass) {
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'lib-card';
+    btn.className = 'lib-card' + (extraClass ? ' ' + extraClass : '');
+    if (extraClass === 'lib-row-card') {
+      var w = item && item.width ? item.width : 0;
+      var h = item && item.height ? item.height : 0;
+      btn.style.aspectRatio = (w > 0 && h > 0) ? (w + ' / ' + h) : '3 / 4';
+    }
     var label = recordCategory(item);
     if (item.feeling) label += '，' + item.feeling;
     btn.setAttribute('aria-label', label);
@@ -871,7 +877,39 @@
     return recordCategory(item) === filter;
   }
 
+  function setLibraryView(mode) {
+    state.libView = mode === 'grid' ? 'grid' : 'rows';
+    var rows = state.libView === 'rows';
+    if (el.libStage) {
+      el.libStage.classList.toggle('lib-mode-rows', rows);
+      el.libStage.classList.toggle('lib-mode-grid', !rows);
+    }
+    if (el.libModes) {
+      qsAll('.lib-mode', el.libModes).forEach(function (b) {
+        var active = b.getAttribute('data-lib-mode') === state.libView;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+    }
+    renderLibrary();
+  }
+
   function renderLibrary() {
+    var isEmpty = !(state.library && state.library.length);
+    var useGrid = state.libView === 'grid';
+    if (el.libraryList) el.libraryList.hidden = !useGrid || isEmpty;
+    if (el.libraryRows) el.libraryRows.hidden = useGrid || isEmpty;
+    if (el.libraryEmpty) {
+      el.libraryEmpty.hidden = !isEmpty;
+      el.libraryEmpty.textContent = '空';
+    }
+    if (el.btnClearAll) el.btnClearAll.hidden = isEmpty;
+    if (isEmpty) return;
+    if (useGrid) renderLibraryGrid();
+    else renderLibraryRows();
+  }
+
+  function renderLibraryGrid() {
     var names = sortedCategoryNames(false);
     if (state.categoryFilter && names.indexOf(state.categoryFilter) === -1) {
       names.push(state.categoryFilter);
@@ -902,18 +940,10 @@
       el.catBar.scrollLeft = keepScroll;
     }
 
-    if (el.btnClearAll) el.btnClearAll.hidden = !(state.library && state.library.length);
-
     var box = el.libraryList;
     if (!box) return;
     box.innerHTML = '';
-    var empty = !list.length;
-    box.hidden = empty;
-    if (el.libraryEmpty) {
-      el.libraryEmpty.hidden = !empty;
-      el.libraryEmpty.textContent = '空';
-    }
-    if (empty) return;
+    if (!list.length) return;
 
     var cols = [document.createElement('div'), document.createElement('div')];
     var heights = [0, 0];
@@ -926,6 +956,98 @@
     });
     box.appendChild(cols[0]);
     box.appendChild(cols[1]);
+  }
+
+  function buildLibRow(sec) {
+    var row = document.createElement('section');
+    row.className = 'lib-row';
+    var head = document.createElement('div');
+    head.className = 'lib-row-head';
+    var title = document.createElement('span');
+    title.className = 'lib-row-title';
+    title.textContent = sec.title;
+    head.appendChild(title);
+    var count = document.createElement('span');
+    count.className = 'lib-row-count';
+    count.textContent = sec.items.length;
+    head.appendChild(count);
+    if (sec.name) {
+      var all = document.createElement('button');
+      all.type = 'button';
+      all.className = 'lib-row-all';
+      all.textContent = '查看全部 ›';
+      all.addEventListener('click', function () {
+        state.categoryFilter = sec.name;
+        setLibraryView('grid');
+        if (el.libScroll) el.libScroll.scrollTop = 0;
+      });
+      head.appendChild(all);
+    }
+    row.appendChild(head);
+    var track = document.createElement('div');
+    track.className = 'lib-row-track';
+    row.appendChild(track);
+    row.__items = sec.items;
+    row.__rendered = false;
+    return row;
+  }
+
+  function renderLibRowItems(row) {
+    if (!row || row.__rendered) return;
+    row.__rendered = true;
+    var track = row.querySelector('.lib-row-track');
+    if (!track) return;
+    (row.__items || []).forEach(function (item) {
+      track.appendChild(makeLibraryCard(item, 'lib-row-card'));
+    });
+  }
+
+  var libRowObserver = null;
+
+  function observeLibRows() {
+    if (!el.libraryRows) return;
+    if (libRowObserver) {
+      libRowObserver.disconnect();
+      libRowObserver = null;
+    }
+    var rows = qsAll('.lib-row', el.libraryRows);
+    if (typeof IntersectionObserver !== 'function') {
+      rows.forEach(renderLibRowItems);
+      return;
+    }
+    libRowObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        renderLibRowItems(en.target);
+        if (libRowObserver) libRowObserver.unobserve(en.target);
+      });
+    }, { root: el.libScroll || null, rootMargin: '120% 0px' });
+    rows.forEach(function (r) {
+      libRowObserver.observe(r);
+    });
+  }
+
+  function renderLibraryRows() {
+    if (!el.libraryRows) return;
+    el.libraryRows.innerHTML = '';
+    var names = sortedCategoryNames(false);
+    var sections = [];
+    if (names.length > 1) {
+      sections.push({ name: '', title: '最近收藏', items: state.library || [] });
+    }
+    names.forEach(function (name) {
+      sections.push({
+        name: name,
+        title: name,
+        items: (state.library || []).filter(function (it) {
+          return recordCategory(it) === name;
+        })
+      });
+    });
+    sections.forEach(function (sec) {
+      el.libraryRows.appendChild(buildLibRow(sec));
+    });
+    observeLibRows();
   }
 
   function sheetAddField(parent, label, value) {
@@ -1525,8 +1647,11 @@
     el.noteProgress = $('note-progress');
     el.btnNoteSkip = $('btn-note-skip');
     el.libraryList = $('library-list');
+    el.libraryRows = $('library-rows');
     el.libraryEmpty = $('library-empty');
     el.libScroll = $('lib-scroll');
+    el.libStage = document.querySelector('#view-library .lib-stage');
+    el.libModes = $('lib-modes');
     el.catBar = $('cat-bar');
     el.noteCatChips = $('note-cat-chips');
     el.fieldNewCat = $('field-new-cat');
@@ -1685,6 +1810,16 @@
         });
       });
     });
+
+    if (el.libModes) {
+      qsAll('.lib-mode', el.libModes).forEach(function (b) {
+        b.addEventListener('click', function () {
+          setLibraryView(b.getAttribute('data-lib-mode'));
+          if (el.libScroll) el.libScroll.scrollTop = 0;
+        });
+      });
+    }
+    setLibraryView('rows');
 
     el.btnBuildExport.addEventListener('click', function () {
       prepareCopyPrompt();

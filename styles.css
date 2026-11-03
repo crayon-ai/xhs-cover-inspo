@@ -1305,6 +1305,119 @@ html.is-library body {
 
 .lib-clear:active { color: rgba(255, 255, 255, 0.6); }
 
+/* ——— Library · category rows（分类横滑浏览）——— */
+.lib-stage {
+  --lib-row-h: clamp(150px, 46vw, 230px);
+}
+
+/* 模式切换：分类 / 全部（复用 cat-chip 外观） */
+.lib-modes {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 10px;
+}
+
+.lib-modes .lib-mode { font-size: 12px; }
+
+/* 行模式：隐藏底部分类筛选条（行即分类） */
+#app.is-library .lib-stage.lib-mode-rows .cat-bar { display: none; }
+
+.lib-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  padding-bottom: 6px;
+}
+
+/* display:flex 会盖过 hidden 属性，需显式声明 */
+.lib-rows[hidden] { display: none; }
+.library-grid[hidden] { display: none; }
+
+.lib-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+
+.lib-row-title {
+  font-size: 16px;
+  font-weight: 650;
+  color: #ffffff;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lib-row-count {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+}
+
+.lib-row-all {
+  margin-left: auto;
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 0 4px 12px;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease-out);
+}
+
+.lib-row-all:active { color: rgba(255, 255, 255, 0.8); }
+
+.lib-row-all:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.75);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 横向轨道：吸附 + 右缘露出（与库 12px 内边距对齐） */
+.lib-row-track {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: 12px;
+  padding: 2px 12px 6px;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  min-height: calc(var(--lib-row-h) + 8px);
+}
+
+.lib-row-track::-webkit-scrollbar { display: none; }
+
+/* 行内卡片：统一行高、宽度随原比例、不裁切 */
+.lib-row-card {
+  flex: 0 0 auto;
+  height: var(--lib-row-h);
+  width: auto;
+  max-width: 78vw;
+  border-radius: 16px;
+  scroll-snap-align: start;
+}
+
+.lib-row-card canvas,
+.lib-row-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 /* ——— Cover detail sheet ——— */
 .lib-sheet {
   position: fixed;

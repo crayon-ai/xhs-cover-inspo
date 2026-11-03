@@ -88,11 +88,16 @@
         </div>
       </section>
 
-      <!-- 灵感库 · 近黑双列 + 底部分类条 -->
+      <!-- 灵感库 · 分类横滑行 / 全部双列 + 底部分类条 -->
       <section id="view-library" class="view">
         <div class="lib-stage">
+          <div class="lib-modes" id="lib-modes" role="tablist" aria-label="浏览方式">
+            <button type="button" class="cat-chip lib-mode is-active" data-lib-mode="rows" role="tab" aria-selected="true">分类</button>
+            <button type="button" class="cat-chip lib-mode" data-lib-mode="grid" role="tab" aria-selected="false">全部</button>
+          </div>
           <div class="lib-scroll" id="lib-scroll">
             <div id="library-list" class="library-grid" aria-label="已保存封面"></div>
+            <div id="library-rows" class="lib-rows" aria-label="按分类浏览" hidden></div>
             <p id="library-empty" class="lib-empty" hidden>空</p>
           </div>
           <div class="lib-dock">
