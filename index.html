@@ -8,13 +8,6 @@
 </head>
 <body>
   <div id="app">
-    <header class="topbar">
-      <div class="brand-row">
-        <h1 class="logo">封面灵感</h1>
-      </div>
-      <p class="hint-persist stamp-badge stamp-badge--quiet">本机存储 · 清缓存可能丢</p>
-    </header>
-
     <nav class="tabs" id="tabs" aria-label="主导航">
       <button type="button" class="tab is-active" data-view="import"><span>导入</span></button>
       <button type="button" class="tab" data-view="library"><span>灵感库</span></button>
@@ -43,7 +36,6 @@
                 <span class="import-hit__plus">+</span>
               </span>
             </span>
-            <span class="import-hit__label">导入</span>
           </label>
           <input id="file-input" type="file" accept="image/*" multiple hidden />
           <div id="pick-stage" class="pick-stage is-hidden">
@@ -62,10 +54,7 @@
       <!-- 记笔记 -->
       <section id="view-note" class="view">
         <div class="note-stage enter">
-          <div class="section-head note-head">
-            <h2>记笔记</h2>
-            <p class="note-progress" id="note-progress"></p>
-          </div>
+          <p class="note-progress" id="note-progress"></p>
           <div id="note-cover-preview" class="note-cover"></div>
           <form id="note-form" class="note-form">
             <label>为何想点
@@ -103,12 +92,9 @@
       <!-- 灵感库 · 近黑双列 + 底部分类条 -->
       <section id="view-library" class="view">
         <div class="lib-stage">
-          <div class="section-head lib-head">
-            <h2>灵感库</h2>
-          </div>
           <div class="lib-scroll" id="lib-scroll">
             <div id="library-list" class="library-grid" aria-label="已保存封面"></div>
-            <p id="library-empty" class="lib-empty" hidden>还没有封面</p>
+            <p id="library-empty" class="lib-empty" hidden>空</p>
           </div>
           <div class="lib-dock">
             <div id="cat-bar" class="cat-bar" role="tablist" aria-label="分类"></div>
@@ -120,19 +106,11 @@
       <!-- 提示词 -->
       <section id="view-export" class="view">
         <div class="export-stage enter">
-          <div class="section-head">
-            <h2>提示词</h2>
-          </div>
-          <p class="export-hint">长按截图保存</p>
           <button type="button" id="btn-build-export" class="btn primary">生成汇总</button>
           <div id="export-board" class="export-board empty">空</div>
         </div>
       </section>
     </main>
-
-    <footer class="foot">
-      <span>Crayon_ · 封面灵感 · 离线</span>
-    </footer>
 
   </div>
 
@@ -154,6 +132,16 @@
           <button type="button" id="sheet-confirm-cancel" class="sheet-confirm__cancel">取消</button>
           <button type="button" id="sheet-confirm-ok" class="sheet-confirm__ok">确认</button>
         </div>
+      </div>
+    </div>
+  </div>
+  <div id="ask" class="sheet-confirm ask" hidden>
+    <button type="button" id="ask-backdrop" class="sheet-confirm__backdrop" aria-label="取消"></button>
+    <div class="sheet-confirm__box" role="dialog" aria-modal="true">
+      <p id="ask-text"></p>
+      <div class="sheet-confirm__actions">
+        <button type="button" id="ask-cancel" class="sheet-confirm__cancel">取消</button>
+        <button type="button" id="ask-ok" class="sheet-confirm__ok">确认</button>
       </div>
     </div>
   </div>
