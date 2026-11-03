@@ -18,8 +18,6 @@
     noteQueue: [],
     noteIndex: 0,
     library: [],
-    categoryFilter: '',
-    libView: 'rows',
     noteCategory: '',
     extraCategories: [],
     sheetId: null,
@@ -870,92 +868,16 @@
     return btn;
   }
 
-  function passesCategoryFilter(item) {
-    var filter = state.categoryFilter || '';
-    if (!filter) return true;
-    if (state.sheetId && item && item.id === state.sheetId) return true;
-    return recordCategory(item) === filter;
-  }
-
-  function setLibraryView(mode) {
-    state.libView = mode === 'grid' ? 'grid' : 'rows';
-    var rows = state.libView === 'rows';
-    if (el.libStage) {
-      el.libStage.classList.toggle('lib-mode-rows', rows);
-      el.libStage.classList.toggle('lib-mode-grid', !rows);
-    }
-    if (el.libModes) {
-      qsAll('.lib-mode', el.libModes).forEach(function (b) {
-        var active = b.getAttribute('data-lib-mode') === state.libView;
-        b.classList.toggle('is-active', active);
-        b.setAttribute('aria-selected', active ? 'true' : 'false');
-      });
-    }
-    renderLibrary();
-  }
-
   function renderLibrary() {
     var isEmpty = !(state.library && state.library.length);
-    var useGrid = state.libView === 'grid';
-    if (el.libraryList) el.libraryList.hidden = !useGrid || isEmpty;
-    if (el.libraryRows) el.libraryRows.hidden = useGrid || isEmpty;
+    if (el.libraryRows) el.libraryRows.hidden = isEmpty;
     if (el.libraryEmpty) {
       el.libraryEmpty.hidden = !isEmpty;
       el.libraryEmpty.textContent = '空';
     }
     if (el.btnClearAll) el.btnClearAll.hidden = isEmpty;
     if (isEmpty) return;
-    if (useGrid) renderLibraryGrid();
-    else renderLibraryRows();
-  }
-
-  function renderLibraryGrid() {
-    var names = sortedCategoryNames(false);
-    if (state.categoryFilter && names.indexOf(state.categoryFilter) === -1) {
-      names.push(state.categoryFilter);
-    }
-    var filter = state.categoryFilter || '';
-    var list = (state.library || []).filter(passesCategoryFilter);
-
-    if (el.catBar) {
-      var keepScroll = el.catBar.scrollLeft || 0;
-      el.catBar.innerHTML = '';
-      var options = [''].concat(names);
-      options.forEach(function (name) {
-        var label = name || '全部';
-        var active = filter === name;
-        var b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'cat-chip' + (active ? ' is-active' : '');
-        b.textContent = label;
-        b.setAttribute('role', 'tab');
-        b.setAttribute('aria-selected', active ? 'true' : 'false');
-        b.addEventListener('click', function () {
-          state.categoryFilter = name;
-          renderLibrary();
-          if (el.libScroll) el.libScroll.scrollTop = 0;
-        });
-        el.catBar.appendChild(b);
-      });
-      el.catBar.scrollLeft = keepScroll;
-    }
-
-    var box = el.libraryList;
-    if (!box) return;
-    box.innerHTML = '';
-    if (!list.length) return;
-
-    var cols = [document.createElement('div'), document.createElement('div')];
-    var heights = [0, 0];
-    cols[0].className = 'lib-col';
-    cols[1].className = 'lib-col';
-    list.forEach(function (item) {
-      var side = heights[0] <= heights[1] ? 0 : 1;
-      heights[side] += coverRatio(item);
-      cols[side].appendChild(makeLibraryCard(item));
-    });
-    box.appendChild(cols[0]);
-    box.appendChild(cols[1]);
+    renderLibraryRows();
   }
 
   function buildLibRow(sec) {
@@ -971,18 +893,6 @@
     count.className = 'lib-row-count';
     count.textContent = sec.items.length;
     head.appendChild(count);
-    if (sec.name) {
-      var all = document.createElement('button');
-      all.type = 'button';
-      all.className = 'lib-row-all';
-      all.textContent = '查看全部 ›';
-      all.addEventListener('click', function () {
-        state.categoryFilter = sec.name;
-        setLibraryView('grid');
-        if (el.libScroll) el.libScroll.scrollTop = 0;
-      });
-      head.appendChild(all);
-    }
     row.appendChild(head);
     var track = document.createElement('div');
     track.className = 'lib-row-track';
@@ -1085,12 +995,6 @@
   }
 
   function closeLibrarySheet() {
-    var id = state.sheetId;
-    var dropFromFilter = false;
-    if (id && state.categoryFilter) {
-      var openItem = libraryItemById(id);
-      if (openItem && recordCategory(openItem) !== state.categoryFilter) dropFromFilter = true;
-    }
     state.sheetId = null;
     state.sheetBase = null;
     state.sheetDraft = null;
@@ -1100,7 +1004,6 @@
     if (el.sheetPanel) el.sheetPanel.style.transform = '';
     if (el.sheetCover) el.sheetCover.innerHTML = '';
     if (el.libSheet) el.libSheet.hidden = true;
-    if (dropFromFilter) renderLibrary();
   }
 
   function sheetSnapshot(item) {
@@ -1646,13 +1549,9 @@
     el.tagPreview = $('tag-preview');
     el.noteProgress = $('note-progress');
     el.btnNoteSkip = $('btn-note-skip');
-    el.libraryList = $('library-list');
     el.libraryRows = $('library-rows');
     el.libraryEmpty = $('library-empty');
     el.libScroll = $('lib-scroll');
-    el.libStage = document.querySelector('#view-library .lib-stage');
-    el.libModes = $('lib-modes');
-    el.catBar = $('cat-bar');
     el.noteCatChips = $('note-cat-chips');
     el.fieldNewCat = $('field-new-cat');
     el.btnAddCat = $('btn-add-cat');
@@ -1801,7 +1700,6 @@
         openDb().then(function (db) {
           return idbClear(db).then(function () {
             db.close();
-            state.categoryFilter = '';
             closeLibrarySheet();
             return refreshLibrary();
           });
@@ -1810,16 +1708,6 @@
         });
       });
     });
-
-    if (el.libModes) {
-      qsAll('.lib-mode', el.libModes).forEach(function (b) {
-        b.addEventListener('click', function () {
-          setLibraryView(b.getAttribute('data-lib-mode'));
-          if (el.libScroll) el.libScroll.scrollTop = 0;
-        });
-      });
-    }
-    setLibraryView('rows');
 
     el.btnBuildExport.addEventListener('click', function () {
       prepareCopyPrompt();

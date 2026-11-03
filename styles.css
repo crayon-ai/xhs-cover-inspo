@@ -1130,7 +1130,7 @@ html.is-library body {
   border-color: var(--line);
 }
 
-/* ——— Library · near-black two-column gallery ——— */
+/* ——— Library · near-black category rows ——— */
 .lib-stage {
   flex: 1 1 auto;
   min-height: 0;
@@ -1167,21 +1167,6 @@ html.is-library body {
 }
 
 .lib-scroll::-webkit-scrollbar { display: none; }
-
-.library-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  align-items: start;
-  padding-bottom: 6px;
-}
-
-.lib-col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
 
 .lib-card {
   display: block;
@@ -1234,29 +1219,12 @@ html.is-library body {
   flex: none;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
-  padding: 6px 0 6px;
+  padding: 6px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: #0a0a0a;
 }
-
-.cat-bar {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  scroll-padding-inline: 2px;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  padding: 2px 0;
-}
-
-.cat-bar::-webkit-scrollbar { display: none; }
 
 .cat-chip {
   flex: 0 0 auto;
@@ -1310,29 +1278,15 @@ html.is-library body {
   --lib-row-h: clamp(150px, 46vw, 230px);
 }
 
-/* 模式切换：分类 / 全部（复用 cat-chip 外观） */
-.lib-modes {
-  flex: none;
-  display: flex;
-  gap: 6px;
-  padding: 0 12px 10px;
-}
-
-.lib-modes .lib-mode { font-size: 12px; }
-
-/* 行模式：隐藏底部分类筛选条（行即分类） */
-#app.is-library .lib-stage.lib-mode-rows .cat-bar { display: none; }
-
 .lib-rows {
   display: flex;
   flex-direction: column;
   gap: 26px;
-  padding-bottom: 6px;
+  padding: 6px 0 6px;
 }
 
 /* display:flex 会盖过 hidden 属性，需显式声明 */
 .lib-rows[hidden] { display: none; }
-.library-grid[hidden] { display: none; }
 
 .lib-row-head {
   display: flex;
@@ -1360,27 +1314,6 @@ html.is-library body {
   background: rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-pill);
   padding: 1px 8px;
-}
-
-.lib-row-all {
-  margin-left: auto;
-  flex: none;
-  border: 0;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.45);
-  font: inherit;
-  font-size: 12px;
-  padding: 4px 0 4px 12px;
-  cursor: pointer;
-  transition: color var(--dur) var(--ease-out);
-}
-
-.lib-row-all:active { color: rgba(255, 255, 255, 0.8); }
-
-.lib-row-all:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.75);
-  outline-offset: 2px;
-  border-radius: 4px;
 }
 
 /* 横向轨道：吸附 + 右缘露出（与库 12px 内边距对齐） */
