@@ -127,22 +127,30 @@
     var onImport = name === 'import';
     var onCandidates = name === 'candidates';
     var onLibrary = name === 'library';
-    var darkChrome = onImport || onCandidates || onLibrary;
+    var onNote = name === 'note';
+    var onExport = name === 'export';
+    var darkChrome = onImport || onCandidates || onLibrary || onNote || onExport;
     var appRoot = document.getElementById('app');
     if (appRoot) {
       appRoot.classList.toggle('is-import', onImport);
       appRoot.classList.toggle('is-candidates', onCandidates);
       appRoot.classList.toggle('is-library', onLibrary);
+      appRoot.classList.toggle('is-note', onNote);
+      appRoot.classList.toggle('is-export', onExport);
       appRoot.classList.toggle('is-dark-chrome', darkChrome);
     }
     document.documentElement.classList.toggle('is-import', onImport);
     document.documentElement.classList.toggle('is-candidates', onCandidates);
     document.documentElement.classList.toggle('is-library', onLibrary);
+    document.documentElement.classList.toggle('is-note', onNote);
+    document.documentElement.classList.toggle('is-export', onExport);
     document.documentElement.classList.toggle('is-dark-chrome', darkChrome);
     if (document.body) {
       document.body.classList.toggle('is-import', onImport);
       document.body.classList.toggle('is-candidates', onCandidates);
       document.body.classList.toggle('is-library', onLibrary);
+      document.body.classList.toggle('is-note', onNote);
+      document.body.classList.toggle('is-export', onExport);
       document.body.classList.toggle('is-dark-chrome', darkChrome);
     }
     if (!onLibrary) closeLibrarySheet();
@@ -638,10 +646,21 @@
     });
   }
 
+  function fitNoteCanvas(canvas) {
+    var nw = canvas.width;
+    var nh = canvas.height;
+    if (!nw || !nh) return;
+    var maxW = Math.min(260, Math.max(160, window.innerWidth - 96));
+    var maxH = Math.round(window.innerHeight * 0.42);
+    var scale = Math.min(maxW / nw, maxH / nh);
+    canvas.style.width = Math.max(1, Math.round(nw * scale)) + 'px';
+    canvas.style.height = Math.max(1, Math.round(nh * scale)) + 'px';
+  }
+
   function fillNoteForm() {
     var item = state.noteQueue[state.noteIndex];
     el.noteProgress.textContent =
-      '进度 ' + (state.noteIndex + 1) + ' / ' + state.noteQueue.length;
+      (state.noteIndex + 1) + ' / ' + state.noteQueue.length;
     el.fieldWhy.value = '';
     el.fieldFeeling.value = '';
     el.fieldStructure.value = '';
@@ -655,8 +674,11 @@
     var canvas = document.createElement('canvas');
     el.noteCover.appendChild(canvas);
     if (item) {
-      paintBlobToCanvas(item.blob, canvas).catch(function () {});
+      paintBlobToCanvas(item.blob, canvas).then(function () {
+        fitNoteCanvas(canvas);
+      }).catch(function () {});
     }
+    if (window.scrollTo) window.scrollTo(0, 0);
   }
 
   async function saveCurrentNote(skip) {
@@ -854,7 +876,7 @@
     names.forEach(function (name) {
       var b = document.createElement('button');
       b.type = 'button';
-      b.className = 'chip' + (selected === name ? ' is-active' : '');
+      b.className = 'cat-chip' + (selected === name ? ' is-active' : '');
       b.textContent = name;
       b.setAttribute('role', 'option');
       b.setAttribute('aria-selected', selected === name ? 'true' : 'false');
@@ -1178,13 +1200,13 @@
     var list = state.library;
     if (!list.length) {
       board.classList.add('empty');
-      board.textContent = '灵感库为空，先保存几张封面再来生成汇总。';
+      board.textContent = '还没有封面';
       return;
     }
 
     var title = document.createElement('p');
-    title.className = 'muted';
-    title.textContent = '共 ' + list.length + ' 条。可在本页截图保存；文案支持选中后对照抄写。';
+    title.className = 'export-count';
+    title.textContent = list.length + ' 条';
     board.appendChild(title);
 
     for (var i = 0; i < list.length; i++) {
