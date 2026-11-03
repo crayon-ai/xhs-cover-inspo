@@ -75,25 +75,26 @@
         </div>
       </section>
 
-      <!-- 笔记表单（叠层） -->
+      <!-- 记笔记 -->
       <section id="view-note" class="view">
-        <div class="card soft enter">
-          <div class="section-head">
-            <h2>当场记笔记</h2>
+        <div class="note-stage enter">
+          <div class="section-head note-head">
+            <h2>记笔记</h2>
+            <p class="note-progress" id="note-progress"></p>
           </div>
-          <div id="note-cover-preview" class="note-cover polaroid"></div>
+          <div id="note-cover-preview" class="note-cover"></div>
           <form id="note-form" class="note-form">
             <label>为何想点
-              <textarea id="field-why" rows="2" placeholder="标题/人物/配色吸引我…"></textarea>
+              <textarea id="field-why" rows="2" placeholder="标题、配色"></textarea>
             </label>
             <label>感觉
-              <textarea id="field-feeling" rows="2" placeholder="清爽 / 高级 / 热闹 / 安静…"></textarea>
+              <textarea id="field-feeling" rows="2" placeholder="清爽、安静"></textarea>
             </label>
             <label>结构亮点
-              <textarea id="field-structure" rows="2" placeholder="大标题置顶、三分法、留白…"></textarea>
+              <textarea id="field-structure" rows="2" placeholder="留白、三分"></textarea>
             </label>
             <label>画面可学点
-              <textarea id="field-learn" rows="2" placeholder="光影、材质、字体对比、色块…"></textarea>
+              <textarea id="field-learn" rows="2" placeholder="光影、字体"></textarea>
             </label>
             <div class="note-cat">
               <span class="note-cat__k" id="note-cat-label">分类</span>
@@ -104,7 +105,7 @@
               </div>
             </div>
             <label>标签
-              <input id="field-tags" type="text" placeholder="美妆, 居家, 人物特写" />
+              <input id="field-tags" type="text" placeholder="美妆, 居家" />
             </label>
             <div id="tag-preview" class="chips tag-preview" aria-live="polite"></div>
             <div class="row-actions">
@@ -112,7 +113,6 @@
               <button type="submit" class="btn primary">保存并下一张</button>
             </div>
           </form>
-          <p class="muted note-progress" id="note-progress"></p>
         </div>
       </section>
 
@@ -133,17 +133,15 @@
         </div>
       </section>
 
-      <!-- 提示词预览 / 导出替代 -->
+      <!-- 提示词 -->
       <section id="view-export" class="view">
-        <div class="card soft enter">
+        <div class="export-stage enter">
           <div class="section-head">
-            <h2>提示词预览</h2>
+            <h2>提示词</h2>
           </div>
-          <p class="muted">无法下载或复制。请<strong class="mark-coral">长按截图</strong>保存。</p>
-          <div class="row-actions single">
-            <button type="button" id="btn-build-export" class="btn primary">生成汇总视图</button>
-          </div>
-          <div id="export-board" class="export-board empty">点上方按钮生成汇总。</div>
+          <p class="export-hint">长按截图保存</p>
+          <button type="button" id="btn-build-export" class="btn primary">生成汇总</button>
+          <div id="export-board" class="export-board empty">空</div>
         </div>
       </section>
     </main>
