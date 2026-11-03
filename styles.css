@@ -105,26 +105,26 @@ body {
 .stamp-badge__dot { display: none; }
 
 
-/* ——— Dark chrome: import + candidates (How We Feel / Craft Postcard) ——— */
+/* ——— Light chrome: white wall from the pure-white library demo ——— */
 html.is-dark-chrome,
 html.is-dark-chrome body,
 html.is-import,
 html.is-import body {
-  background: #0a0a0a;
-  color: #f5f5f5;
+  background: #ffffff;
+  color: #1a1a1a;
 }
 
 #app.is-dark-chrome,
 #app.is-import,
 #app.is-library {
-  background: #0a0a0a;
+  background: #ffffff;
   min-height: 100vh;
 }
 
 #app.is-dark-chrome .logo,
 #app.is-import .logo,
 #app.is-library .logo {
-  color: #ffffff;
+  color: #1a1a1a;
 }
 
 #app.is-dark-chrome .stamp-badge--quiet,
@@ -133,30 +133,27 @@ html.is-import body {
 #app.is-import .stamp-badge,
 #app.is-library .stamp-badge--quiet,
 #app.is-library .stamp-badge {
-  color: rgba(255, 255, 255, 0.38);
+  color: rgba(26, 26, 26, 0.38);
 }
 
 html.is-dark-chrome .tabs {
-  border-bottom-color: rgba(255, 255, 255, 0.12);
-  background: rgba(10, 10, 10, 0.88);
+  border-color: rgba(0, 0, 0, 0.08);
+  background: #ffffff;
 }
 
 html.is-dark-chrome .tab {
-  color: rgba(255, 255, 255, 0.55);
+  color: #6e6e6e;
 }
 
 html.is-dark-chrome .tab.is-active {
   color: #ffffff;
-}
-
-html.is-dark-chrome .tab.is-active {
-  background: rgba(255, 255, 255, 0.16);
+  background: #111111;
 }
 
 #app.is-dark-chrome .foot,
 #app.is-import .foot,
 #app.is-library .foot {
-  color: rgba(255, 255, 255, 0.28);
+  color: rgba(26, 26, 26, 0.34);
 }
 
 /* Library is one screen. 100vh is taller than the visible phone viewport, so it
@@ -214,7 +211,7 @@ html.is-library body {
   padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
 }
 
-/* ——— Tabs · underline / near-black ——— */
+/* ——— Tabs · white capsule ——— */
 .tabs {
   position: fixed;
   z-index: 80;
@@ -227,10 +224,10 @@ html.is-library body {
   grid-template-columns: repeat(3, auto);
   gap: 2px;
   padding: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 999px;
-  background: rgba(16, 16, 16, 0.9);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(20, 20, 20, 0.12);
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
@@ -265,7 +262,7 @@ html.is-library body {
 .tab span { position: relative; z-index: 1; }
 
 .tab.is-active {
-  background: rgba(255, 255, 255, 0.14);
+  background: #111111;
   color: #ffffff;
   font-weight: 600;
   box-shadow: none;
@@ -427,7 +424,7 @@ html.is-library body {
   padding-left: 20px;
   padding-right: 20px;
   min-height: calc(100vh - 160px);
-  background: #0a0a0a;
+  background: #ffffff;
 }
 
 .import-stage {
@@ -456,7 +453,7 @@ html.is-library body {
   background: transparent;
   box-shadow: none;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(26, 26, 26, 0.55);
   transition: transform 140ms var(--ease-out);
   -webkit-user-select: none;
   user-select: none;
@@ -488,7 +485,7 @@ html.is-library body {
     rgba(100, 170, 130, 0.07) 28%,
     rgba(90, 140, 200, 0.06) 46%,
     rgba(140, 110, 190, 0.05) 60%,
-    rgba(10, 10, 10, 0) 72%
+    rgba(255, 255, 255, 0) 72%
   );
   pointer-events: none;
   z-index: 0;
@@ -577,14 +574,14 @@ html.is-library body {
   margin-left: -69px;
   margin-top: -92px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   background:
-    linear-gradient(165deg, #2a2a2c 0%, #1c1c1e 55%, #141416 100%);
-  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.45);
+    linear-gradient(165deg, #f4efe8 0%, #e7dfd4 55%, #ddd4c6 100%);
+  box-shadow: 0 16px 36px rgba(20, 20, 20, 0.10);
   opacity: 0;
   animation: fake-card-in 520ms var(--ease-out) both;
   pointer-events: none;
-  filter: brightness(0.72) saturate(0.85);
+  filter: none;
 }
 
 .import-fake-card::after {
@@ -595,12 +592,12 @@ html.is-library body {
   top: 12px;
   height: 42%;
   border-radius: 6px;
-  background: linear-gradient(180deg, #3a3a3e 0%, #262628 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.28) 100%);
   opacity: 0.7;
 }
 
 .import-fake-card--real {
-  background: #1a1a1c;
+  background: #f3f3f3;
 }
 
 .import-fake-card--real::after {
@@ -617,7 +614,7 @@ html.is-library body {
   border-radius: inherit;
   pointer-events: none;
   object-fit: cover;
-  filter: brightness(0.8) saturate(0.9);
+  filter: none;
 }
 
 .import-fake-card--a {
@@ -630,7 +627,7 @@ html.is-library body {
 
 .import-fake-card--b {
   transform: translate(46px, 3px) rotate(5deg);
-  background: linear-gradient(155deg, #2c2c30 0%, #1a1a1c 48%, #121214 100%);
+  background: linear-gradient(155deg, #f7f1e8 0%, #e8dccb 48%, #d9cbb8 100%);
   animation:
     fake-card-in 520ms var(--ease-out) 110ms both,
     fake-card-float-b 8.6s ease-in-out -4.4s infinite;
@@ -638,24 +635,24 @@ html.is-library body {
 }
 
 .import-fake-card--b::after {
-  background: linear-gradient(180deg, #3a3a40 0%, #26262a 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.22) 100%);
   height: 36%;
 }
 
 .import-fake-card--c {
   transform: translate(-4px, -13px) rotate(-2deg);
-  background: linear-gradient(180deg, #262628 0%, #141416 100%);
+  background: linear-gradient(180deg, #f6f3ee 0%, #e4d9cc 100%);
   animation:
     fake-card-in 520ms var(--ease-out) 180ms both,
     fake-card-float-c 9.8s ease-in-out -6.7s infinite;
   z-index: 3;
-  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 16px 36px rgba(20, 20, 20, 0.12);
 }
 
 .import-fake-card--c::after {
   top: 14px;
   height: 48%;
-  background: linear-gradient(165deg, #343438 0%, #222224 100%);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.3) 100%);
 }
 
 @keyframes fake-card-in {
@@ -761,8 +758,8 @@ html.is-library body {
   border-radius: 50%;
   background: #ffffff;
   box-shadow:
-    0 8px 28px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(255, 255, 255, 0.9);
+    0 10px 28px rgba(20, 20, 20, 0.14),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
   color: #111111;
   font-size: 36px;
   font-weight: 300;
@@ -778,7 +775,7 @@ html.is-library body {
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(26, 26, 26, 0.55);
   text-align: center;
   pointer-events: none;
   z-index: 1;
@@ -808,16 +805,16 @@ html.is-library body {
 
 .import-actions .btn { margin-top: 0; }
 
-/* Import CTA: white pill on black — not charcoal ink */
+/* Import CTA: ink pill on the white wall */
 #app.is-import .import-actions .btn.primary {
-  background: #ffffff;
-  color: #111111;
+  background: #1a1a1a;
+  color: #f7f6f1;
   font-weight: 600;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 8px 24px rgba(20, 20, 20, 0.12);
 }
 
 #app.is-import .import-actions .btn.primary:hover:not(:disabled) {
-  filter: brightness(0.96);
+  filter: brightness(1.12);
 }
 
 .import-actions .btn.primary {
@@ -831,7 +828,7 @@ html.is-library body {
   cursor: pointer;
   border: 0 !important;
   background: transparent !important;
-  color: rgba(255, 255, 255, 0.45) !important;
+  color: rgba(26, 26, 26, 0.45) !important;
   box-shadow: none !important;
   font-size: 13px !important;
   font-weight: 400 !important;
@@ -896,10 +893,10 @@ html.is-library body {
   display: block;
   border-radius: 18px;
   overflow: hidden;
-  background: #1a1a1a;
+  background: #f3f3f3;
   box-shadow:
-    0 22px 48px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 255, 255, 0.06);
+    0 12px 28px rgba(20, 20, 20, 0.10),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
   transition: box-shadow 180ms ease;
 }
 
@@ -909,14 +906,14 @@ html.is-library body {
   aspect-ratio: 3 / 4;
   object-fit: cover;
   display: block;
-  background: #141414;
+  background: #f3f3f3;
   pointer-events: none;
 }
 
 .cover-card.is-selected .cover-face {
   box-shadow:
-    0 22px 48px rgba(0, 0, 0, 0.55),
-    0 0 0 2px rgba(255, 255, 255, 0.88);
+    0 12px 28px rgba(20, 20, 20, 0.12),
+    0 0 0 2px #1a1a1a;
 }
 
 .cover-card .badge {
@@ -947,31 +944,31 @@ html.is-library body {
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.42);
+  color: rgba(26, 26, 26, 0.42);
 }
 
 .cand-pager.is-hidden { display: none; }
 
-/* ——— Note · near-black stage ——— */
+/* ——— Note · white wall, same layout ——— */
 #app.is-note .btn.primary {
-  background: rgba(255, 255, 255, 0.92);
-  color: #111111;
+  background: #1a1a1a;
+  color: #f7f6f1;
   border-color: transparent;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 8px 24px rgba(20, 20, 20, 0.10);
 }
 
 #app.is-note .btn.primary:hover:not(:disabled) {
-  filter: brightness(0.96);
+  filter: brightness(1.12);
 }
 
 #app.is-note .btn.ghost {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.78);
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgba(26, 26, 26, 0.72);
 }
 
 #app.is-note .section-head h2 {
-  color: #ffffff;
+  color: #1a1a1a;
 }
 
 .note-head { margin-bottom: 4px; }
@@ -989,10 +986,10 @@ html.is-library body {
   height: auto;
   max-width: min(260px, 70vw);
   border-radius: 18px;
-  background: #1a1a1a;
+  background: #f3f3f3;
   box-shadow:
-    0 22px 48px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 255, 255, 0.06);
+    0 16px 36px rgba(20, 20, 20, 0.10),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 
 .note-form label,
@@ -1001,7 +998,7 @@ html.is-library body {
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 12px;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(26, 26, 26, 0.78);
 }
 
 .note-form textarea,
@@ -1009,28 +1006,28 @@ html.is-library body {
   display: block;
   width: 100%;
   margin-top: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(0, 0, 0, 0.10);
   border-radius: 14px;
   padding: 11px 12px;
   font: inherit;
   font-size: 15px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #f5f5f5;
-  caret-color: #f5f5f5;
+  background: #f7f7f5;
+  color: #1a1a1a;
+  caret-color: #1a1a1a;
   resize: vertical;
   transition: border-color var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
 }
 
 .note-form textarea::placeholder,
 .note-form input[type="text"]::placeholder {
-  color: rgba(255, 255, 255, 0.32);
+  color: rgba(26, 26, 26, 0.32);
 }
 
 .note-form textarea:focus,
 .note-form input[type="text"]:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+  border-color: rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
 }
 
 .note-progress {
@@ -1039,7 +1036,7 @@ html.is-library body {
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.38);
+  color: rgba(26, 26, 26, 0.38);
 }
 
 .note-progress:empty { display: none; }
@@ -1048,9 +1045,9 @@ html.is-library body {
 .tag-preview:empty { display: none; }
 
 #app.is-note .tag-preview .chip.static {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.82);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: #ffffff;
+  color: #1a1a1a;
+  border-color: rgba(0, 0, 0, 0.10);
 }
 
 .note-cat { margin-bottom: 12px; }
@@ -1082,9 +1079,9 @@ html.is-library body {
   border-radius: var(--radius-pill);
   padding: 0 16px;
   min-height: 44px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #ffffff;
+  color: #1a1a1a;
   cursor: pointer;
 }
 
@@ -1170,10 +1167,10 @@ html.is-library body {
   border: 0;
   border-radius: 18px;
   overflow: hidden;
-  background: #1a1a1a;
+  background: #f3f3f3;
   box-shadow:
-    0 12px 28px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(255, 255, 255, 0.06);
+    0 10px 24px rgba(20, 20, 20, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -1184,7 +1181,7 @@ html.is-library body {
 .lib-card:active { transform: scale(0.985); }
 
 .lib-card:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.75);
+  outline: 2px solid rgba(26, 26, 26, 0.55);
   outline-offset: 2px;
 }
 
@@ -1194,7 +1191,7 @@ html.is-library body {
   height: auto;
   display: block;
   vertical-align: top;
-  background: #141414;
+  background: #f3f3f3;
   pointer-events: none;
 }
 
@@ -1205,7 +1202,7 @@ html.is-library body {
   align-items: center;
   justify-content: center;
   margin: 0;
-  color: rgba(255, 255, 255, 0.42);
+  color: rgba(26, 26, 26, 0.42);
   font-size: 14px;
   letter-spacing: 0.02em;
 }
@@ -1217,17 +1214,17 @@ html.is-library body {
   justify-content: flex-end;
   gap: 6px;
   padding: 6px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: #0a0a0a;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
 }
 
 .cat-chip {
   flex: 0 0 auto;
   scroll-snap-align: start;
   scroll-snap-stop: normal;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #ffffff;
+  color: rgba(26, 26, 26, 0.72);
   border-radius: var(--radius-pill);
   padding: 5px 11px;
   font: inherit;
@@ -1241,16 +1238,16 @@ html.is-library body {
 }
 
 .cat-chip.is-active {
-  background: #ffffff;
-  color: #111111;
-  border-color: #ffffff;
+  background: #1a1a1a;
+  color: #ffffff;
+  border-color: #1a1a1a;
   font-weight: 600;
 }
 
 .cat-chip:active { transform: scale(0.96); }
 
 .cat-chip:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.75);
+  outline: 2px solid rgba(26, 26, 26, 0.55);
   outline-offset: 2px;
 }
 
@@ -1258,7 +1255,7 @@ html.is-library body {
   flex: none;
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.32);
+  color: rgba(26, 26, 26, 0.34);
   font: inherit;
   font-size: 11px;
   letter-spacing: 0.04em;
@@ -1266,7 +1263,7 @@ html.is-library body {
   cursor: pointer;
 }
 
-.lib-clear:active { color: rgba(255, 255, 255, 0.6); }
+.lib-clear:active { color: rgba(26, 26, 26, 0.6); }
 
 /* ——— Library · category rows（分类横滑浏览）——— */
 .lib-stage {
@@ -1293,7 +1290,7 @@ html.is-library body {
 .lib-row-title {
   font-size: 16px;
   font-weight: 650;
-  color: #ffffff;
+  color: #1a1a1a;
   letter-spacing: 0.01em;
   white-space: nowrap;
   overflow: hidden;
@@ -1305,8 +1302,8 @@ html.is-library body {
   font-size: 11px;
   font-weight: 600;
   line-height: 1.2;
-  color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.1);
+  color: #333333;
+  background: rgba(0, 0, 0, 0.06);
   border-radius: var(--radius-pill);
   padding: 1px 8px;
 }
@@ -1363,7 +1360,7 @@ html.is-library body {
   border: 0;
   padding: 0;
   margin: 0;
-  background: rgba(0, 0, 0, 0.62);
+  background: rgba(0, 0, 0, 0.28);
   cursor: pointer;
 }
 
@@ -1374,11 +1371,11 @@ html.is-library body {
   max-height: min(88vh, 760px);
   max-height: min(88dvh, 760px);
   overflow: auto;
-  background: #141414;
-  color: #f5f5f5;
+  background: #ffffff;
+  color: #1a1a1a;
   border-radius: 22px 22px 0 0;
   padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px));
-  box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 -16px 40px rgba(20, 20, 20, 0.12);
   animation: sheet-up var(--dur) var(--ease-out);
   -webkit-overflow-scrolling: touch;
 }
@@ -1387,7 +1384,7 @@ html.is-library body {
   width: 36px;
   height: 4px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.16);
   margin: 4px auto 12px;
   touch-action: none;
 }
@@ -1400,8 +1397,8 @@ html.is-library body {
   height: 32px;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+  background: rgba(0, 0, 0, 0.06);
+  color: #1a1a1a;
   font: inherit;
   font-size: 18px;
   line-height: 1;
@@ -1416,7 +1413,7 @@ html.is-library body {
   margin: 28px 0 0;
   border-radius: 16px;
   overflow: hidden;
-  background: #0e0e0e;
+  background: #f3f3f3;
 }
 
 .lib-sheet__cover canvas,
@@ -1427,7 +1424,7 @@ html.is-library body {
   width: auto;
   height: auto;
   display: block;
-  background: #0e0e0e;
+  background: #f3f3f3;
   object-fit: contain;
 }
 
@@ -1440,14 +1437,14 @@ html.is-library body {
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.42);
+  color: rgba(26, 26, 26, 0.42);
 }
 
 .sheet-v {
   margin: 0;
   font-size: 15px;
   line-height: 1.45;
-  color: rgba(255, 255, 255, 0.92);
+  color: #1a1a1a;
   word-break: break-word;
 }
 
@@ -1469,20 +1466,20 @@ html.is-library body {
   width: 100%;
   margin: 0;
   min-height: 44px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-  color: #f5f5f5;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: #f7f7f5;
+  color: #1a1a1a;
   border-radius: var(--radius-pill);
   padding: 8px 14px;
   font: inherit;
   font-size: 15px;
 }
 
-.sheet-cat-add input::placeholder { color: rgba(255, 255, 255, 0.38); }
+.sheet-cat-add input::placeholder { color: rgba(26, 26, 26, 0.32); }
 
 .sheet-cat-add input:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.5);
+  border-color: rgba(0, 0, 0, 0.45);
 }
 
 .sheet-cat-add button {
@@ -1492,9 +1489,9 @@ html.is-library body {
   border-radius: var(--radius-pill);
   padding: 0 16px;
   min-height: 44px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #ffffff;
+  color: #1a1a1a;
   cursor: pointer;
 }
 
@@ -1504,24 +1501,24 @@ html.is-library body {
   display: block;
   width: 100%;
   margin: 0;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(0, 0, 0, 0.10);
   border-radius: 14px;
   padding: 10px 12px;
   font: inherit;
   font-size: 15px;
   line-height: 1.45;
-  color: #f5f5f5;
-  caret-color: #f5f5f5;
-  background: rgba(255, 255, 255, 0.06);
+  color: #1a1a1a;
+  caret-color: #1a1a1a;
+  background: #f7f7f5;
   resize: vertical;
 }
 
-.sheet-input::placeholder { color: rgba(255, 255, 255, 0.32); }
+.sheet-input::placeholder { color: rgba(26, 26, 26, 0.32); }
 
 .sheet-input:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+  border-color: rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
 }
 
 .sheet-save {
@@ -1531,8 +1528,8 @@ html.is-library body {
   min-height: 48px;
   border: 0;
   border-radius: var(--radius-pill);
-  background: #ffffff;
-  color: #111111;
+  background: #1a1a1a;
+  color: #f7f6f1;
   font: inherit;
   font-size: 15px;
   font-weight: 600;
@@ -1564,13 +1561,13 @@ html.is-library body {
 .sheet-confirm__box {
   position: relative;
   width: min(300px, 100%);
-  background: #1a1a1a;
-  color: #f5f5f5;
+  background: #ffffff;
+  color: #1a1a1a;
   border-radius: 18px;
   padding: 22px 16px 14px;
   box-shadow:
-    0 18px 48px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 255, 255, 0.08);
+    0 18px 48px rgba(20, 20, 20, 0.16),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 
 .sheet-confirm__box p {
@@ -1597,15 +1594,15 @@ html.is-library body {
 }
 
 .sheet-confirm__cancel {
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #ffffff;
+  color: rgba(26, 26, 26, 0.72);
 }
 
 .sheet-confirm__ok {
   border: 0;
-  background: #ffffff;
-  color: #111111;
+  background: #1a1a1a;
+  color: #f7f6f1;
 }
 
 .sheet-confirm__cancel:active,
@@ -1623,7 +1620,7 @@ html.is-library body {
   padding: 12px;
   border: 0;
   background: transparent;
-  color: rgba(220, 150, 145, 0.9);
+  color: #c45c5c;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
@@ -1667,7 +1664,7 @@ html.is-library body {
 
   .import-fake-card {
     opacity: 0.9;
-    filter: brightness(0.72) saturate(0.85);
+    filter: none;
   }
 
   .btn.primary:active:not(:disabled),
