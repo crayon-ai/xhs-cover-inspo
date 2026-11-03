@@ -17,7 +17,6 @@
 
     <nav class="tabs" id="tabs" aria-label="主导航">
       <button type="button" class="tab is-active" data-view="import"><span>导入</span></button>
-      <button type="button" class="tab" data-view="candidates"><span>候选</span></button>
       <button type="button" class="tab" data-view="library"><span>灵感库</span></button>
       <button type="button" class="tab" data-view="export"><span>提示词</span></button>
     </nav>
@@ -47,31 +46,16 @@
             <span class="import-hit__label">导入</span>
           </label>
           <input id="file-input" type="file" accept="image/*" multiple hidden />
-          <div id="import-preview" class="import-preview is-hidden" aria-live="polite"></div>
-          <div id="import-actions" class="import-actions is-hidden">
-            <button type="button" id="btn-slice" class="btn primary" disabled>开始切封面</button>
-            <label class="btn ghost import-repick" for="file-input">换一张</label>
-            <button type="button" id="btn-reset-import" class="btn ghost">清空重来</button>
+          <div id="pick-stage" class="pick-stage is-hidden">
+            <div class="pick-rail-wrap">
+              <div id="pick-rail" class="cand-rail" aria-label="封面"></div>
+            </div>
+            <p id="pick-pager" class="cand-pager is-hidden" aria-live="polite"></p>
+            <div class="import-actions">
+              <button type="button" id="btn-note" class="btn primary" disabled>记笔记</button>
+              <label class="btn ghost import-repick" for="file-input">换一张</label>
+            </div>
           </div>
-        </div>
-      </section>
-
-      <!-- 候选 -->
-      <section id="view-candidates" class="view">
-        <div class="cand-panel enter">
-          <div class="section-head">
-            <h2>封面候选</h2>
-          </div>
-          <p class="muted" id="candidates-meta">先导入截图再切分。</p>
-          <div class="row-actions cand-toolbar">
-            <button type="button" id="btn-select-all" class="btn ghost" disabled>全选</button>
-            <button type="button" id="btn-clear-sel" class="btn ghost" disabled>清空选择</button>
-          </div>
-          <div class="cand-stage" id="candidates-stage">
-            <div id="candidates-rail" class="cand-rail" aria-label="封面候选轮播"></div>
-          </div>
-          <p id="candidates-pager" class="cand-pager is-hidden" aria-live="polite"></p>
-          <button type="button" id="btn-save-selected" class="btn primary" disabled>为所选填写笔记</button>
         </div>
       </section>
 

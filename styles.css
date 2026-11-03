@@ -109,16 +109,13 @@ body {
 html.is-dark-chrome,
 html.is-dark-chrome body,
 html.is-import,
-html.is-import body,
-html.is-candidates,
-html.is-candidates body {
+html.is-import body {
   background: #0a0a0a;
   color: #f5f5f5;
 }
 
 #app.is-dark-chrome,
 #app.is-import,
-#app.is-candidates,
 #app.is-library {
   background: #0a0a0a;
   min-height: 100vh;
@@ -126,7 +123,6 @@ html.is-candidates body {
 
 #app.is-dark-chrome .logo,
 #app.is-import .logo,
-#app.is-candidates .logo,
 #app.is-library .logo {
   color: #ffffff;
 }
@@ -135,8 +131,6 @@ html.is-candidates body {
 #app.is-dark-chrome .stamp-badge,
 #app.is-import .stamp-badge--quiet,
 #app.is-import .stamp-badge,
-#app.is-candidates .stamp-badge--quiet,
-#app.is-candidates .stamp-badge,
 #app.is-library .stamp-badge--quiet,
 #app.is-library .stamp-badge {
   color: rgba(255, 255, 255, 0.38);
@@ -144,7 +138,6 @@ html.is-candidates body {
 
 #app.is-dark-chrome .tabs,
 #app.is-import .tabs,
-#app.is-candidates .tabs,
 #app.is-library .tabs {
   border-bottom-color: rgba(255, 255, 255, 0.12);
   background: rgba(10, 10, 10, 0.72);
@@ -160,28 +153,24 @@ html.is-candidates body {
 
 #app.is-dark-chrome .tab,
 #app.is-import .tab,
-#app.is-candidates .tab,
 #app.is-library .tab {
   color: rgba(255, 255, 255, 0.42);
 }
 
 #app.is-dark-chrome .tab.is-active,
 #app.is-import .tab.is-active,
-#app.is-candidates .tab.is-active,
 #app.is-library .tab.is-active {
   color: #ffffff;
 }
 
 #app.is-dark-chrome .tab.is-active::after,
 #app.is-import .tab.is-active::after,
-#app.is-candidates .tab.is-active::after,
 #app.is-library .tab.is-active::after {
   background: #ffffff;
 }
 
 #app.is-dark-chrome .foot,
 #app.is-import .foot,
-#app.is-candidates .foot,
 #app.is-library .foot {
   color: rgba(255, 255, 255, 0.28);
 }
@@ -257,7 +246,7 @@ html.is-library body {
 /* ——— Tabs · underline / near-black ——— */
 .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 0;
   margin: 12px 0 18px;
   background: transparent;
@@ -563,14 +552,14 @@ html.is-library body {
   100% { transform: scale(1.32); opacity: 0; }
 }
 
-.import-stage.is-preview .import-ripple,
-.import-stage.is-preview .import-ripple__ring {
+.import-stage.is-pick .import-ripple,
+.import-stage.is-pick .import-ripple__ring {
   animation: none !important;
   opacity: 0;
 }
 
-.import-stage.is-preview .import-glow {
-  opacity: 0.2;
+.import-stage.is-pick .import-glow {
+  opacity: 0;
 }
 
 /* Cluster: dim micro-stack + rainbow ring */
@@ -813,53 +802,24 @@ html.is-library body {
   z-index: 1;
 }
 
-.import-stage.is-preview .import-hit__label {
+.import-stage.is-pick .import-hit__label {
   display: none;
 }
 
-.import-preview {
+.pick-stage {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
   flex: 1;
-  min-height: 320px;
-  padding: 8px 4px 4px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  overflow: hidden;
+  min-height: 0;
+  justify-content: center;
 }
 
-.import-preview.is-hidden { display: none; }
+.pick-stage.is-hidden { display: none; }
 
-.import-preview__frame {
-  width: 100%;
-  max-width: 260px;
-  background: #161616;
-  border-radius: 14px;
-  padding: 10px 10px 22px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-}
-
-.import-preview__frame canvas,
-.import-preview__frame img {
-  width: 100%;
-  display: block;
-  border-radius: var(--radius-inner);
-  background: #0f0f0f;
-  max-height: 420px;
-  object-fit: contain;
-}
-
-.import-preview__meta {
-  margin: 0;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.45);
-  font-weight: 400;
+.pick-rail-wrap {
+  position: relative;
+  margin: 0 -20px;
+  perspective: 1100px;
 }
 
 .import-actions {
@@ -903,66 +863,7 @@ html.is-library body {
   min-height: auto !important;
 }
 
-/* ——— Candidates: Craft Your Postcard tilt on near-black ——— */
-#view-candidates {
-  background: transparent;
-}
-
-#app.is-candidates .cand-panel.card,
-#app.is-candidates .cand-panel {
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  padding-left: 0;
-  padding-right: 0;
-}
-
-#app.is-candidates .section-head h2 {
-  color: #ffffff;
-}
-
-#app.is-candidates .muted,
-#app.is-candidates .cand-pager {
-  color: rgba(255, 255, 255, 0.42);
-}
-
-#app.is-candidates .btn.ghost {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.78);
-}
-
-#app.is-candidates .btn.ghost:disabled {
-  opacity: 0.35;
-  color: rgba(255, 255, 255, 0.45);
-}
-
-#app.is-candidates .btn.primary {
-  background: rgba(255, 255, 255, 0.92);
-  color: #111111;
-  border-color: transparent;
-}
-
-#app.is-candidates .btn.primary:disabled {
-  opacity: 0.4;
-}
-
-.cand-panel {
-  padding-bottom: 8px;
-}
-
-.cand-toolbar {
-  margin-bottom: 4px;
-}
-
-.cand-stage {
-  position: relative;
-  margin: 8px -20px 0;
-  padding: 8px 0 4px;
-  background: transparent;
-  perspective: 1100px;
-}
-
+/* Cover pick rail, shown inside import after a screenshot is sliced. */
 .cand-rail {
   display: flex;
   align-items: center;
