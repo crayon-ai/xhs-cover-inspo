@@ -186,21 +186,51 @@ html.is-candidates body {
   color: rgba(255, 255, 255, 0.28);
 }
 
-/* Library locks to the viewport: covers scroll, category bar stays above the footer. */
+/* Library is one screen. 100vh is taller than the visible phone viewport, so it
+   must not set min-height. The fixed shell is the fallback; 100dvh wins when supported. */
+html.is-library,
+html.is-library body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 #app.is-library {
-  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 480px;
+  height: 100%;
+  max-height: 100%;
   height: 100dvh;
-  max-height: 100vh;
   max-height: 100dvh;
+  min-height: 0;
+  margin: 0 auto;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
   padding-bottom: 0;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
 }
+
+#app.is-library .topbar { margin-bottom: 2px; }
+
+#app.is-library .stamp-badge--quiet { margin-top: 2px; }
+
+#app.is-library .tabs { margin: 6px 0 8px; }
 
 #app.is-library main {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -209,6 +239,7 @@ html.is-candidates body {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
   flex-direction: column;
 }
 
@@ -220,7 +251,7 @@ html.is-candidates body {
   flex: none;
   margin-top: 0;
   padding-top: 2px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
 }
 
 /* ——— Tabs · underline / near-black ——— */
@@ -1217,11 +1248,17 @@ html.is-candidates body {
 .lib-stage {
   flex: 1 1 auto;
   min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-.lib-head { margin-bottom: 8px; }
+.lib-head { margin-bottom: 4px; }
+
+#app.is-library .lib-head h2 {
+  font-size: 16px;
+  line-height: 1.2;
+}
 
 .lib-scroll {
   flex: 1 1 auto;
