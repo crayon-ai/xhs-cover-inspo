@@ -149,8 +149,8 @@ html.is-dark-chrome .tab.is-active {
   color: #ffffff;
 }
 
-html.is-dark-chrome .tab.is-active::after {
-  background: #ffffff;
+html.is-dark-chrome .tab.is-active {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 #app.is-dark-chrome .foot,
@@ -189,9 +189,9 @@ html.is-library body {
   flex-direction: column;
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
-  padding-right: max(20px, env(safe-area-inset-right, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
   padding-bottom: 0;
-  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
 }
 
 #app.is-library main {
@@ -218,26 +218,24 @@ html.is-library body {
 .tabs {
   position: fixed;
   z-index: 80;
-  top: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  width: max-content;
+  max-width: calc(100% - 28px);
+  margin: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0;
-  padding: calc(4px + env(safe-area-inset-top, 0px)) 8px 8px;
-  border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 0;
-  background: rgba(10, 10, 10, 0.92);
-  box-shadow: none;
+  grid-template-columns: repeat(3, auto);
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(16, 16, 16, 0.9);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
-  -webkit-transform: translateY(-110%);
-  transform: translateY(-110%);
+  -webkit-transform: translate(-50%, -160%);
+  transform: translate(-50%, -160%);
   transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out), visibility 200ms var(--ease-out);
 }
 
@@ -245,8 +243,8 @@ html.is-library body {
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
-  -webkit-transform: translateY(0);
-  transform: translateY(0);
+  -webkit-transform: translate(-50%, 0);
+  transform: translate(-50%, 0);
 }
 
 .tab {
@@ -255,33 +253,25 @@ html.is-library body {
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  padding: 10px 4px 12px;
-  border-radius: 0;
+  line-height: 1.2;
+  padding: 6px 12px;
+  border-radius: 999px;
   cursor: pointer;
-  transition: color var(--dur) var(--ease-out);
+  transition: color var(--dur) var(--ease-out), background var(--dur) var(--ease-out);
 }
 
 .tab span { position: relative; z-index: 1; }
 
 .tab.is-active {
-  background: transparent;
-  color: var(--ink);
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
   font-weight: 600;
   box-shadow: none;
 }
 
-.tab.is-active::after {
-  content: "";
-  position: absolute;
-  left: 22%;
-  right: 22%;
-  bottom: -1px;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: var(--ink);
-}
+.tab.is-active::after { content: none; }
 
 /* ——— Views ——— */
 .view { display: none; }
@@ -1181,15 +1171,15 @@ html.is-library body {
 .library-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
   align-items: start;
-  padding-bottom: 8px;
+  padding-bottom: 6px;
 }
 
 .lib-col {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -1244,8 +1234,8 @@ html.is-library body {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 0 10px;
+  gap: 6px;
+  padding: 6px 0 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: #0a0a0a;
 }
@@ -1276,9 +1266,9 @@ html.is-library body {
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.78);
   border-radius: var(--radius-pill);
-  padding: 8px 14px;
+  padding: 5px 11px;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1.2;
   white-space: nowrap;
@@ -1674,7 +1664,7 @@ html.is-export body {
   width: auto;
   margin: 0;
   z-index: 5;
-  min-height: 52px;
+  min-height: 46px;
   background: #f4f1ea;
   color: #161616;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
@@ -1692,8 +1682,8 @@ html.is-export body {
   display: flex;
   flex: 0 0 auto;
   width: 100%;
-  height: 56vh;
-  height: 56dvh;
+  height: 52vh;
+  height: 52dvh;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
