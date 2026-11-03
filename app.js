@@ -21,7 +21,10 @@
     categoryFilter: '',
     noteCategory: '',
     extraCategories: [],
-    sheetId: null
+    sheetId: null,
+    sheetBase: null,
+    sheetDraft: null,
+    sheetExtraCats: []
   };
 
   var el = {};
@@ -967,10 +970,100 @@
       if (openItem && recordCategory(openItem) !== state.categoryFilter) dropFromFilter = true;
     }
     state.sheetId = null;
+    state.sheetBase = null;
+    state.sheetDraft = null;
+    state.sheetExtraCats = [];
+    hideSheetConfirm();
+    if (el.sheetSave) el.sheetSave.hidden = true;
     if (el.sheetPanel) el.sheetPanel.style.transform = '';
     if (el.sheetCover) el.sheetCover.innerHTML = '';
     if (el.libSheet) el.libSheet.hidden = true;
     if (dropFromFilter) renderLibrary();
+  }
+
+  function sheetSnapshot(item) {
+    return {
+      category: recordCategory(item),
+      whyClick: String(item.whyClick || ''),
+      feeling: String(item.feeling || ''),
+      structure: String(item.structure || ''),
+      learnable: String(item.learnable || '')
+    };
+  }
+
+  function sheetNorm(value) {
+    return String(value || '').trim();
+  }
+
+  function isSheetDirty() {
+    var base = state.sheetBase;
+    var draft = state.sheetDraft;
+    if (!base || !draft) return false;
+    return sheetNorm(draft.category) !== sheetNorm(base.category)
+      || sheetNorm(draft.whyClick) !== sheetNorm(base.whyClick)
+      || sheetNorm(draft.feeling) !== sheetNorm(base.feeling)
+      || sheetNorm(draft.structure) !== sheetNorm(base.structure)
+      || sheetNorm(draft.learnable) !== sheetNorm(base.learnable);
+  }
+
+  function syncSheetSaveBtn() {
+    if (!el.sheetSave) return;
+    el.sheetSave.hidden = !isSheetDirty();
+  }
+
+  function hideSheetConfirm() {
+    if (el.sheetConfirm) el.sheetConfirm.hidden = true;
+  }
+
+  function showSheetConfirm() {
+    if (!isSheetDirty() || !el.sheetConfirm) return;
+    el.sheetConfirm.hidden = false;
+  }
+
+  function sheetCategoryOptions() {
+    var names = sheetCategoryNames();
+    (state.sheetExtraCats || []).forEach(function (name) {
+      if (name && names.indexOf(name) === -1) names.push(name);
+    });
+    return names;
+  }
+
+  function paintSheetChips() {
+    if (!el.sheetChips || !state.sheetDraft) return;
+    var current = sheetNorm(state.sheetDraft.category) || UNCATEGORIZED;
+    el.sheetChips.innerHTML = '';
+    sheetCategoryOptions().forEach(function (name) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cat-chip' + (current === name ? ' is-active' : '');
+      b.textContent = name;
+      b.setAttribute('aria-pressed', current === name ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        state.sheetDraft.category = name;
+        paintSheetChips();
+        syncSheetSaveBtn();
+      });
+      el.sheetChips.appendChild(b);
+    });
+  }
+
+  function sheetAddEditor(parent, label, key) {
+    var row = document.createElement('div');
+    row.className = 'sheet-row';
+    var k = document.createElement('p');
+    k.className = 'sheet-k';
+    k.textContent = label;
+    var area = document.createElement('textarea');
+    area.className = 'sheet-input';
+    area.rows = 2;
+    area.value = state.sheetDraft[key] || '';
+    area.addEventListener('input', function () {
+      state.sheetDraft[key] = area.value;
+      syncSheetSaveBtn();
+    });
+    row.appendChild(k);
+    row.appendChild(area);
+    parent.appendChild(row);
   }
 
   function sheetCategoryNames() {
@@ -980,12 +1073,12 @@
   }
 
   function fillSheetFields(item) {
-    if (!el.sheetFields || !item) return;
+    if (!el.sheetFields || !item || !state.sheetDraft) return;
     el.sheetFields.innerHTML = '';
-    sheetAddField(el.sheetFields, '为何想点', item.whyClick);
-    sheetAddField(el.sheetFields, '感觉', item.feeling);
-    sheetAddField(el.sheetFields, '结构亮点', item.structure);
-    sheetAddField(el.sheetFields, '画面可学点', item.learnable);
+    sheetAddEditor(el.sheetFields, '为何想点', 'whyClick');
+    sheetAddEditor(el.sheetFields, '感觉', 'feeling');
+    sheetAddEditor(el.sheetFields, '结构亮点', 'structure');
+    sheetAddEditor(el.sheetFields, '画面可学点', 'learnable');
 
     var row = document.createElement('div');
     row.className = 'sheet-row sheet-row--cat';
@@ -994,18 +1087,7 @@
     k.textContent = '分类';
     var chips = document.createElement('div');
     chips.className = 'sheet-cat-chips';
-    var current = recordCategory(item);
-    sheetCategoryNames().forEach(function (name) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'cat-chip' + (current === name ? ' is-active' : '');
-      b.textContent = name;
-      b.setAttribute('aria-pressed', current === name ? 'true' : 'false');
-      b.addEventListener('click', function () {
-        saveSheetCategory(item, name);
-      });
-      chips.appendChild(b);
-    });
+    el.sheetChips = chips;
     var add = document.createElement('div');
     add.className = 'sheet-cat-add';
     var input = document.createElement('input');
@@ -1021,8 +1103,12 @@
       var name = normalizeCategoryName(input.value);
       if (!name) return;
       input.value = '';
-      rememberCategory(name);
-      saveSheetCategory(item, name);
+      if (state.sheetExtraCats.indexOf(name) === -1 && sheetCategoryNames().indexOf(name) === -1) {
+        state.sheetExtraCats.push(name);
+      }
+      state.sheetDraft.category = name;
+      paintSheetChips();
+      syncSheetSaveBtn();
     }
     addBtn.addEventListener('click', addSheetCategory);
     input.addEventListener('keydown', function (ev) {
@@ -1037,27 +1123,48 @@
     row.appendChild(chips);
     row.appendChild(add);
     el.sheetFields.appendChild(row);
+    paintSheetChips();
 
     sheetAddField(el.sheetFields, '标签', tagsLine(item));
     sheetAddField(el.sheetFields, '保存', formatSavedAt(item.createdAt));
+    syncSheetSaveBtn();
   }
 
-  function saveSheetCategory(item, name) {
-    if (!item || !name || recordCategory(item) === name) return;
-    var prev = item.category;
-    item.category = name;
+  function commitSheetEdits() {
+    var item = libraryItemById(state.sheetId);
+    if (!item || !state.sheetDraft || !isSheetDirty()) return;
+    var prev = {
+      category: item.category,
+      whyClick: item.whyClick,
+      feeling: item.feeling,
+      structure: item.structure,
+      learnable: item.learnable
+    };
+    var draft = state.sheetDraft;
+    item.whyClick = sheetNorm(draft.whyClick);
+    item.feeling = sheetNorm(draft.feeling);
+    item.structure = sheetNorm(draft.structure);
+    item.learnable = sheetNorm(draft.learnable);
+    if (sheetNorm(draft.category) !== sheetNorm(state.sheetBase.category)) {
+      item.category = sheetNorm(draft.category);
+    }
+    (state.sheetExtraCats || []).forEach(rememberCategory);
     openDb().then(function (db) {
       return idbPut(db, item).then(function () {
         db.close();
-        var fresh = libraryItemById(item.id) || item;
-        fresh.category = name;
+        state.sheetBase = sheetSnapshot(item);
+        state.sheetDraft = sheetSnapshot(item);
+        state.sheetExtraCats = [];
+        hideSheetConfirm();
+        syncSheetSaveBtn();
         renderLibrary();
-        if (state.sheetId === item.id && el.libSheet && !el.libSheet.hidden) {
-          fillSheetFields(fresh);
-        }
       });
     }).catch(function () {
-      item.category = prev;
+      item.category = prev.category;
+      item.whyClick = prev.whyClick;
+      item.feeling = prev.feeling;
+      item.structure = prev.structure;
+      item.learnable = prev.learnable;
       alert('保存失败');
     });
   }
@@ -1092,6 +1199,10 @@
         }).catch(function () {});
       }
     }
+    state.sheetBase = sheetSnapshot(item);
+    state.sheetDraft = sheetSnapshot(item);
+    state.sheetExtraCats = [];
+    hideSheetConfirm();
     fillSheetFields(item);
     el.libSheet.hidden = false;
   }
@@ -1261,6 +1372,11 @@
     el.sheetClose = $('lib-sheet-close');
     el.sheetBackdrop = $('lib-sheet-backdrop');
     el.sheetDelete = $('lib-sheet-delete');
+    el.sheetSave = $('sheet-save');
+    el.sheetConfirm = $('sheet-confirm');
+    el.sheetConfirmCancel = $('sheet-confirm-cancel');
+    el.sheetConfirmOk = $('sheet-confirm-ok');
+    el.sheetConfirmBackdrop = $('sheet-confirm-backdrop');
     el.exportBoard = $('export-board');
     el.btnBuildExport = $('btn-build-export');
 
@@ -1328,6 +1444,30 @@
       });
     }
 
+    if (el.sheetSave) {
+      el.sheetSave.addEventListener('click', function () {
+        showSheetConfirm();
+      });
+    }
+
+    if (el.sheetConfirmCancel) {
+      el.sheetConfirmCancel.addEventListener('click', function () {
+        hideSheetConfirm();
+      });
+    }
+
+    if (el.sheetConfirmBackdrop) {
+      el.sheetConfirmBackdrop.addEventListener('click', function () {
+        hideSheetConfirm();
+      });
+    }
+
+    if (el.sheetConfirmOk) {
+      el.sheetConfirmOk.addEventListener('click', function () {
+        commitSheetEdits();
+      });
+    }
+
     if (el.sheetDelete) {
       el.sheetDelete.addEventListener('click', function () {
         var id = state.sheetId;
@@ -1353,7 +1493,12 @@
     }
 
     document.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Escape' && el.libSheet && !el.libSheet.hidden) closeLibrarySheet();
+      if (ev.key !== 'Escape' || !el.libSheet || el.libSheet.hidden) return;
+      if (el.sheetConfirm && !el.sheetConfirm.hidden) {
+        hideSheetConfirm();
+        return;
+      }
+      closeLibrarySheet();
     });
 
     el.btnClearAll.addEventListener('click', function () {

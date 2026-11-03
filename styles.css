@@ -1465,6 +1465,117 @@ html.is-library body {
 
 .sheet-cat-add button:active { transform: scale(0.98); }
 
+.sheet-input {
+  display: block;
+  width: 100%;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.45;
+  color: #f5f5f5;
+  caret-color: #f5f5f5;
+  background: rgba(255, 255, 255, 0.06);
+  resize: vertical;
+}
+
+.sheet-input::placeholder { color: rgba(255, 255, 255, 0.32); }
+
+.sheet-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+
+.sheet-save {
+  display: block;
+  width: 100%;
+  margin: 8px 0 0;
+  min-height: 48px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: #ffffff;
+  color: #111111;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sheet-save:active { transform: scale(0.98); }
+
+.sheet-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.sheet-confirm__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}
+
+.sheet-confirm__box {
+  position: relative;
+  width: min(300px, 100%);
+  background: #1a1a1a;
+  color: #f5f5f5;
+  border-radius: 18px;
+  padding: 22px 16px 14px;
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.sheet-confirm__box p {
+  margin: 0 0 18px;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.sheet-confirm__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sheet-confirm__cancel,
+.sheet-confirm__ok {
+  min-height: 44px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sheet-confirm__cancel {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.sheet-confirm__ok {
+  border: 0;
+  background: #ffffff;
+  color: #111111;
+}
+
+.sheet-confirm__cancel:active,
+.sheet-confirm__ok:active { transform: scale(0.98); }
+
 .lib-sheet__delete {
   display: block;
   width: 100%;
@@ -1608,6 +1719,9 @@ html.is-library body {
   .cat-chip:active,
   .note-cat-add button:active,
   .sheet-cat-add button:active,
+  .sheet-save:active,
+  .sheet-confirm__cancel:active,
+  .sheet-confirm__ok:active,
   .lib-sheet__close:active {
     transform: none;
   }

@@ -143,7 +143,18 @@
       <button type="button" id="lib-sheet-close" class="lib-sheet__close" aria-label="关闭">×</button>
       <div class="lib-sheet__cover" id="lib-sheet-cover"></div>
       <div class="lib-sheet__fields" id="lib-sheet-fields"></div>
+      <button type="button" id="sheet-save" class="sheet-save" hidden>确认修改</button>
       <button type="button" id="lib-sheet-delete" class="lib-sheet__delete">删除</button>
+    </div>
+    <div id="sheet-confirm" class="sheet-confirm" hidden>
+      <button type="button" id="sheet-confirm-backdrop" class="sheet-confirm__backdrop" aria-label="取消"></button>
+      <div class="sheet-confirm__box" role="dialog" aria-modal="true" aria-label="确认修改">
+        <p>确认修改这张封面的信息？</p>
+        <div class="sheet-confirm__actions">
+          <button type="button" id="sheet-confirm-cancel" class="sheet-confirm__cancel">取消</button>
+          <button type="button" id="sheet-confirm-ok" class="sheet-confirm__ok">确认</button>
+        </div>
+      </div>
     </div>
   </div>
   <script src="./app.js"></script>
