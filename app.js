@@ -1380,6 +1380,22 @@
     ringClickShieldUntil = Date.now() + 420;
   }
 
+  var askShieldUntil = 0; // ask 开窗武装期：吞掉开窗瞬间落下的幽灵 click/pointerup/touchend
+
+  function askShieldActive() {
+    return Date.now() < askShieldUntil;
+  }
+
+  function armAskShield() {
+    askShieldUntil = Date.now() + 480;
+    if (el.ask && el.ask.classList) {
+      el.ask.classList.add('is-arming');
+      setTimeout(function () {
+        if (el.ask) el.ask.classList.remove('is-arming');
+      }, 480);
+    }
+  }
+
   function viewerItem() {
     return libraryItemById(state.viewerId);
   }
@@ -1727,6 +1743,7 @@
   }
 
   function ringExport() {
+    shieldGhostClick(); // 双保险：防 tap-pick/长按松手的合成 click 落进刚打开的 ask
     askConfirm('下载这张？', doRingExport);
   }
 
@@ -1776,6 +1793,7 @@
 
   function onViewerPointerDown(ev) {
     if (!state.viewerId || !el.imgViewer || el.imgViewer.hidden) return;
+    if (el.ask && !el.ask.hidden) return; // ask 弹层打开期间暂停查看器手势，避免误关/拆环
     if (ringState && ringState.tapPick) {
       // 点选模式：点在环按钮上交给 click 处理；点空白处则收环
       var btn = ev.target && ev.target.closest ? ev.target.closest('.ring-btn') : null;
@@ -1817,6 +1835,7 @@
 
   function onViewerPointerUp(ev) {
     if (!viewerPress || ev.pointerId !== viewerPress.id) return;
+    if (el.ask && !el.ask.hidden) { viewerPress = null; return; } // ask 打开期间不动查看器状态
     var p = viewerPress;
     viewerPress = null;
     if (p.timer) clearTimeout(p.timer);
@@ -2564,6 +2583,7 @@
     askHandler = onOk;
     if (el.askText) el.askText.textContent = message;
     el.ask.hidden = false;
+    armAskShield();
   }
 
   function closeAsk() {
@@ -2587,6 +2607,16 @@
   }
 
   function bindChromeMotion() {
+    // ask 武装期：捕获阶段吞掉落向确认/取消/遮罩的事件，防长按松手合成 click 误触「确认」
+    ['click', 'pointerup', 'touchend'].forEach(function (type) {
+      document.addEventListener(type, function (ev) {
+        if (!askShieldActive()) return;
+        var t = ev.target && ev.target.closest ? ev.target.closest('#ask-ok,#ask-cancel,#ask-backdrop') : null;
+        if (!t) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+      }, true);
+    });
     document.addEventListener('touchstart', function (ev) {
       if (ev.touches && ev.touches[0]) gestureY = ev.touches[0].clientY;
     }, false);
