@@ -2317,6 +2317,9 @@ html.is-note body {
   background: rgba(16, 16, 16, 0.88);
   animation: viewer-in 220ms var(--ease-out);
   touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .img-viewer.is-closing {
@@ -2370,12 +2373,24 @@ html.is-note body {
 
 .img-viewer__close:active { transform: scale(0.94); }
 
-/* 操作环按钮：定位走 transform，固定 pointer-events 让手势统一由查看器处理 */
+/* 操作环打开期间：关闭叉不可命中，避免长按/松手命中等效落到叉上误关 */
+.img-viewer.is-ring-open .img-viewer__close {
+  pointer-events: none;
+}
+
+/* 操作环按钮：定位走 transform，手势统一由查看器处理；
+   z-index 高于关闭叉(3)，长按期间命中不会被叉截走 */
 .action-ring {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 4;
   pointer-events: none;
+}
+
+/* 触摸点选模式：松手未选中时保持环可见，按钮可二次点按选择 */
+.action-ring.is-tap-pick .ring-btn {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .ring-btn {
