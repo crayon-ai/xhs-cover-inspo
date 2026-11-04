@@ -1841,9 +1841,10 @@
         ringState.hotDist = Infinity;
         el.actionRing.classList.add('is-tap-pick');
       }
-      return;
+    } else {
+      if (viewerPress && viewerPress.timer) clearTimeout(viewerPress.timer);
     }
-    if (viewerPress && viewerPress.timer) clearTimeout(viewerPress.timer);
+    // cancel 后通常没有配套 pointerup，必须清掉长按状态避免误触
     viewerPress = null;
   }
 
