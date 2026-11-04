@@ -1832,9 +1832,20 @@
   }
 
   function onViewerPointerCancel() {
-    if (viewerPress && viewerPress.timer) clearTimeout(viewerPress.timer);
+    // 触摸长按可能被系统接管而触发 pointercancel：
+    // 环已弹出时不能拆环，改为进入点选模式保留按钮
+    if (ringState) {
+      if (!ringState.tapPick) {
+        ringState.tapPick = true;
+        ringState.hot = null;
+        ringState.hotDist = Infinity;
+        el.actionRing.classList.add('is-tap-pick');
+      }
+    } else {
+      if (viewerPress && viewerPress.timer) clearTimeout(viewerPress.timer);
+    }
+    // cancel 后通常没有配套 pointerup，必须清掉长按状态避免误触
     viewerPress = null;
-    dismissRing();
   }
 
 
@@ -2435,6 +2446,24 @@
       el.imgViewer.addEventListener('pointercancel', onViewerPointerCancel);
       el.imgViewer.addEventListener('contextmenu', function (ev) {
         ev.preventDefault();
+      });
+      // 触摸侧硬抑制系统长按菜单/选区（夸克等浏览器无视 CSS callout）
+      function viewerVisible() {
+        return !!(state.viewerId && el.imgViewer && !el.imgViewer.hidden);
+      }
+      el.imgViewer.addEventListener('touchstart', function (ev) {
+        if (!viewerVisible()) return;
+        // 点选模式下点环按钮需保留原生 click（preventDefault 会吞掉 click）
+        if (ringState && ringState.tapPick && ev.target &&
+            ev.target.closest && ev.target.closest('.ring-btn')) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+      }, { passive: false });
+      el.imgViewer.addEventListener('selectstart', function (ev) {
+        if (viewerVisible()) ev.preventDefault();
+      });
+      el.imgViewer.addEventListener('dragstart', function (ev) {
+        if (viewerVisible()) ev.preventDefault();
       });
       // 环 resolve 后短暂吞掉随后的 click，防长按松手的幽灵点击误关查看器
       el.imgViewer.addEventListener('click', function (ev) {
