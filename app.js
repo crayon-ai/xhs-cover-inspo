@@ -1380,12 +1380,6 @@
     ringClickShieldUntil = Date.now() + 420;
   }
 
-  // 环打开期间：关闭叉不可命中/不可聚焦，避免焦点或命中落到叉上
-  function setRingOpen(on) {
-    if (el.imgViewer) el.imgViewer.classList.toggle('is-ring-open', !!on);
-    if (el.viewerClose) el.viewerClose.tabIndex = on ? -1 : 0;
-  }
-
   function viewerItem() {
     return libraryItemById(state.viewerId);
   }
@@ -1590,7 +1584,6 @@
       targets: null
     };
     el.actionRing.hidden = false;
-    setRingOpen(true);
     ringState.buttons.forEach(function (b, i) {
       b.el.style.transitionDelay = (i * 40) + 'ms';
       b.el.style.opacity = '0';
@@ -1636,7 +1629,6 @@
   function dismissRing() {
     if (!el.actionRing) return;
     el.actionRing.classList.remove('is-tap-pick');
-    setRingOpen(false);
     if (!ringState) {
       el.actionRing.hidden = true;
       return;
@@ -1678,7 +1670,7 @@
         st.hot = null;
         st.hotDist = Infinity;
         el.actionRing.classList.add('is-tap-pick');
-        // 仅 CSS 禁用关闭叉即可，不能 shield：否则随后 420ms 内的点选 click 会被捕获拦截
+        // 不能 shield：否则随后 420ms 内的点选 click 会被捕获拦截
         return;
       }
       dismissRing();
@@ -1780,7 +1772,6 @@
 
   function onViewerPointerDown(ev) {
     if (!state.viewerId || !el.imgViewer || el.imgViewer.hidden) return;
-    if (ev.target === el.viewerClose) return;
     if (ringState && ringState.tapPick) {
       // 点选模式：点在环按钮上交给 click 处理；点空白处则收环
       var btn = ev.target && ev.target.closest ? ev.target.closest('.ring-btn') : null;
@@ -2314,7 +2305,6 @@
     el.btnRepick = $('btn-repick');
     el.imgViewer = $('img-viewer');
     el.viewerCanvas = $('viewer-canvas');
-    el.viewerClose = $('viewer-close');
     el.viewerLike = $('viewer-like');
     el.actionRing = $('action-ring');
     el.viewerToast = $('viewer-toast');
@@ -2446,7 +2436,7 @@
       el.imgViewer.addEventListener('contextmenu', function (ev) {
         ev.preventDefault();
       });
-      // 环 resolve 后短暂吞掉随后的 click（含关闭叉），防长按松手的幽灵点击误关查看器
+      // 环 resolve 后短暂吞掉随后的 click，防长按松手的幽灵点击误关查看器
       el.imgViewer.addEventListener('click', function (ev) {
         if (Date.now() < ringClickShieldUntil) {
           // 点选模式下点击环按钮需正常冒泡到 onRingButtonClick，不拦截
@@ -2459,15 +2449,6 @@
 
     if (el.actionRing) {
       el.actionRing.addEventListener('click', onRingButtonClick);
-    }
-
-    if (el.viewerClose) {
-      el.viewerClose.addEventListener('click', function () {
-        // 防御：环刚 resolve / 仍打开时的幽灵点击不关闭查看器
-        if (Date.now() < ringClickShieldUntil) return;
-        if (el.imgViewer && el.imgViewer.classList.contains('is-ring-open')) return;
-        closeViewer();
-      });
     }
 
     document.addEventListener('keydown', function (ev) {
