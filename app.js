@@ -298,19 +298,199 @@
     return covers;
   }
 
+  // --- Card-based detection ----------------------------------------------
+  // Some screenshots render the page gutter at ~250 brightness while card
+  // backgrounds are pure white (255). There the projection logic above is
+  // blind to white-background covers and splits them at interior near-white
+  // rows. When that 250-vs-255 distinction exists, detect complete cards
+  // (white regions bounded above AND below by gutter rows) and cut each
+  // cover at its title block instead. Images without the distinction (or
+  // cards cut off by chrome) fall through to the projection logic below.
+
+  function gutterFracAtRow(data, imgW, y) {
+    // Page-gutter brightness is ~250; card/pure white is >=253.
+    var cnt = 0;
+    var total = 0;
+    for (var x = 0; x < imgW; x += PROJ_STEP) {
+      total++;
+      var i = (y * imgW + x) * 4;
+      var v = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      if (v >= 248 && v <= 252) cnt++;
+    }
+    return cnt / total;
+  }
+
+  function findGutterRuns(data, imgW, imgH) {
+    var minLen = Math.max(4, Math.round(imgH * 0.002));
+    var runs = [];
+    var start = -1;
+    for (var y = 0; y <= imgH; y++) {
+      var on = y < imgH && gutterFracAtRow(data, imgW, y) > 0.8;
+      if (on && start < 0) start = y;
+      if (!on && start >= 0) {
+        if (y - start >= minLen) runs.push({ y0: start, y1: y - 1 });
+        start = -1;
+      }
+    }
+    return runs;
+  }
+
+  function cardRunsAtRow(data, imgW, y) {
+    var runs = [];
+    var start = -1;
+    for (var x = 0; x <= imgW; x++) {
+      var on = false;
+      if (x < imgW) {
+        var i = (y * imgW + x) * 4;
+        on = (data[i] + data[i + 1] + data[i + 2]) / 3 >= 253;
+      }
+      if (on && start < 0) start = x;
+      if (!on && start >= 0) {
+        runs.push({ x0: start, x1: x - 1, w: x - start });
+        start = -1;
+      }
+    }
+    var minW = Math.round(imgW * 0.2);
+    var cards = [];
+    for (var r = 0; r < runs.length; r++) {
+      if (runs[r].w >= minW) cards.push(runs[r]);
+    }
+    return cards;
+  }
+
+  function textRunsInBand(data, imgW, imgH, band, x0, x1) {
+    var dens = [];
+    for (var y = band.y0; y <= band.y1; y++) {
+      var cnt = 0;
+      var total = 0;
+      for (var x = x0; x <= x1; x += PROJ_STEP) {
+        total++;
+        var i = (y * imgW + x) * 4;
+        if ((data[i] + data[i + 1] + data[i + 2]) / 3 < WHITE_BRIGHT) cnt++;
+      }
+      dens.push(cnt / total);
+    }
+    var gapRows = Math.max(4, Math.round(imgH * 0.002));
+    var runs = [];
+    var yy = 0;
+    while (yy < dens.length) {
+      if (dens[yy] > GAP_ROW) {
+        var s = yy;
+        var e = yy;
+        var run = 0;
+        while (yy < dens.length) {
+          if (dens[yy] <= GAP_ROW) {
+            run++;
+            if (run >= gapRows) break;
+          } else {
+            run = 0;
+            e = yy;
+          }
+          yy++;
+        }
+        runs.push({ y0: band.y0 + s, y1: band.y0 + e });
+      } else {
+        yy++;
+      }
+    }
+    return runs;
+  }
+
+  function detectCardTiles(data, imgW, imgH) {
+    var gut = findGutterRuns(data, imgW, imgH);
+    if (gut.length < 2) return [];
+    var tiles = [];
+    for (var g = 0; g + 1 < gut.length; g++) {
+      var band = { y0: gut[g].y1 + 1, y1: gut[g + 1].y0 - 1 };
+      var bandH = band.y1 - band.y0 + 1;
+      // Measure card x-extents on the whitest background row of the band.
+      var best = null;
+      for (var y = band.y0; y <= band.y1; y++) {
+        var rs = cardRunsAtRow(data, imgW, y);
+        var tw = 0;
+        for (var r = 0; r < rs.length; r++) tw += rs[r].w;
+        if (!best || tw > best.tw) best = { tw: tw, rs: rs };
+      }
+      if (!best) continue;
+      for (r = 0; r < best.rs.length; r++) {
+        var card = best.rs[r];
+        // Bands shorter than a realistic card (chrome strips) are not cards.
+        if (bandH < card.w * 0.6) continue;
+        var runs = textRunsInBand(data, imgW, imgH, band, card.x0, card.x1);
+        // Need author/like row + at least one title line to anchor the cut.
+        if (runs.length < 2) continue;
+        var pad = Math.round(card.w * 0.055);
+        // Walk upward from the last run (author/like row): up to 2 short
+        // title lines with small gaps, then locate the cover bottom.
+        var idx = runs.length - 1;
+        var titleTop = -1;
+        var lines = 0;
+        while (lines < 2 && idx - 1 >= 0) {
+          var cand = runs[idx - 1];
+          if (runs[idx].y0 - cand.y1 > pad * 1.5) break;
+          if (cand.y1 - cand.y0 + 1 > pad * 1.6) break;
+          titleTop = cand.y0;
+          idx--;
+          lines++;
+        }
+        if (titleTop < 0) continue;
+        var coverBottom;
+        if (idx - 1 >= 0 && titleTop - runs[idx - 1].y1 <= pad * 1.5) {
+          // Non-white cover ends right above the title: snap to its bottom.
+          coverBottom = runs[idx - 1].y1;
+        } else {
+          coverBottom = titleTop - pad;
+        }
+        if (coverBottom <= band.y0) continue;
+        tiles.push({ x: card.x0, w: card.w, y0: band.y0, y1: coverBottom, band: band });
+      }
+    }
+    return tiles;
+  }
+
   function detectGridCovers(data, imgW, imgH) {
     var cols = findColumns(data, imgW, imgH);
     var tiles = [];
+    var cardTiles = detectCardTiles(data, imgW, imgH);
+    for (var k = 0; k < cardTiles.length; k++) {
+      var ct = cardTiles[k];
+      // Assign each card tile to the projection column it overlaps most.
+      var bestCol = 0;
+      var bestOv = -1;
+      for (var c2 = 0; c2 < cols.length; c2++) {
+        var ov = Math.min(ct.x + ct.w, cols[c2].x1 + 1) - Math.max(ct.x, cols[c2].x0);
+        if (ov > bestOv) {
+          bestOv = ov;
+          bestCol = c2;
+        }
+      }
+      ct.col = bestCol;
+      tiles.push(ct);
+    }
     for (var c = 0; c < cols.length; c++) {
       var col = cols[c];
       var blocks = findCoverBlocksInColumn(data, imgW, imgH, col.x0, col.x1);
       for (var b = 0; b < blocks.length; b++) {
+        var blk = blocks[b];
+        // Blocks already covered by a card tile (its cover spans the whole
+        // card) would duplicate the split pieces — drop them; blocks in
+        // partial rows keep the projection behaviour.
+        var dup = false;
+        for (var k2 = 0; k2 < cardTiles.length; k2++) {
+          var t2 = cardTiles[k2];
+          var ov2 = Math.min(blk.y1, t2.y1) - Math.max(blk.y0, t2.y0) + 1;
+          if (ov2 > (blk.y1 - blk.y0 + 1) * 0.5) {
+            dup = true;
+            break;
+          }
+        }
+        if (dup) continue;
         tiles.push({
           col: c,
           x: col.x0,
           w: col.x1 - col.x0 + 1,
-          y0: blocks[b].y0,
-          y1: blocks[b].y1
+          y0: blk.y0,
+          y1: blk.y1
         });
       }
     }
