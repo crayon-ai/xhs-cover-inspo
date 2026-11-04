@@ -1727,6 +1727,10 @@
   }
 
   function ringExport() {
+    askConfirm('下载这张？', doRingExport);
+  }
+
+  function doRingExport() {
     var item = viewerItem();
     if (!item || !item.imageBlob) return;
     var canvas = document.createElement('canvas');
