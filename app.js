@@ -19,6 +19,7 @@
     noteIndex: 0,
     library: [],
     noteCategory: '',
+    coverType: '',
     extraCategories: [],
     sheetId: null,
     sheetBase: null,
@@ -567,6 +568,97 @@
     });
   }
 
+  var COVER_TYPES = [
+    {
+      id: 'result',
+      name: '结果展示型',
+      a: { key: 'coreResult', label: '核心结果', ph: '3个月瘦20斤、0粉→10万粉' },
+      b: { key: 'evidence', label: '证据形式', ph: '前后对比照 / 后台数据截图 / 收益图' }
+    },
+    {
+      id: 'emotion',
+      name: '情绪共鸣型',
+      a: { key: 'emotion', label: '主打情绪', ph: '破防——成年人的崩溃是静音的' },
+      b: { key: 'hook', label: '戳人手法', ph: '第一人称独白 / 反问句 / 深夜氛围' }
+    },
+    {
+      id: 'identity',
+      name: '身份认同型',
+      a: { key: 'audience', label: '锁定人群', ph: '30+裸辞的打工人、考研二战的人' },
+      b: { key: 'identityDetail', label: '对号入座细节', ph: '周报、挤地铁、体检报告' }
+    },
+    {
+      id: 'contrast',
+      name: '认知反差型',
+      a: { key: 'contrast', label: '认知反差', ph: '以为多喝水养胃 / 其实喝太多伤肾' },
+      b: { key: 'support', label: '反差支撑', ph: '专业身份 / 具体数据 / 亲身经历' }
+    },
+    {
+      id: 'info',
+      name: '信息差干货型',
+      a: { key: 'benefit', label: '具体好处', ph: '5个免费去水印工具、1个排版公式' },
+      b: { key: 'gap', label: '信息差点', ph: '小众渠道 / 内部规则 / 没人整理过' }
+    }
+  ];
+
+  function coverTypeById(id) {
+    for (var i = 0; i < COVER_TYPES.length; i++) {
+      if (COVER_TYPES[i].id === id) return COVER_TYPES[i];
+    }
+    return null;
+  }
+
+  function renderCoverTypes() {
+    if (!el.noteTypeList) return;
+    el.noteTypeList.innerHTML = '';
+    COVER_TYPES.forEach(function (type) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'note-type__btn' + (state.coverType === type.id ? ' is-on' : '');
+      btn.textContent = type.name;
+      btn.setAttribute('role', 'option');
+      btn.setAttribute('aria-selected', state.coverType === type.id ? 'true' : 'false');
+      btn.addEventListener('click', function () {
+        chooseCoverType(type.id);
+      });
+      el.noteTypeList.appendChild(btn);
+    });
+  }
+
+  function showNoteStep() {
+    var chosen = coverTypeById(state.coverType);
+    if (el.noteType) el.noteType.hidden = !!chosen;
+    if (el.noteForm) el.noteForm.hidden = !chosen;
+    if (el.btnNoteSkipType) el.btnNoteSkipType.hidden = !!chosen;
+    if (!chosen) return;
+    if (el.fieldALabel) el.fieldALabel.textContent = chosen.a.label;
+    if (el.fieldBLabel) el.fieldBLabel.textContent = chosen.b.label;
+    if (el.fieldA) el.fieldA.placeholder = chosen.a.ph;
+    if (el.fieldB) el.fieldB.placeholder = chosen.b.ph;
+    if (el.btnTypeBack) el.btnTypeBack.textContent = chosen.name;
+  }
+
+  function chooseCoverType(id) {
+    if (!coverTypeById(id)) return;
+    if (state.coverType !== id) {
+      if (el.fieldA) el.fieldA.value = '';
+      if (el.fieldB) el.fieldB.value = '';
+    }
+    state.coverType = id;
+    renderCoverTypes();
+    showNoteStep();
+    if (window.scrollTo) window.scrollTo(0, 0);
+  }
+
+  function clearCoverType() {
+    state.coverType = '';
+    if (el.fieldA) el.fieldA.value = '';
+    if (el.fieldB) el.fieldB.value = '';
+    renderCoverTypes();
+    showNoteStep();
+    if (window.scrollTo) window.scrollTo(0, 0);
+  }
+
   function fitNoteCanvas(canvas) {
     var nw = canvas.width;
     var nh = canvas.height;
@@ -582,15 +674,14 @@
     var item = state.noteQueue[state.noteIndex];
     el.noteProgress.textContent =
       (state.noteIndex + 1) + ' / ' + state.noteQueue.length;
+    state.coverType = '';
+    if (el.fieldHeadline) el.fieldHeadline.value = '';
     el.fieldWhy.value = '';
-    el.fieldFeeling.value = '';
-    el.fieldStructure.value = '';
-    el.fieldLearn.value = '';
-    el.fieldTags.value = '';
-    state.noteCategory = '';
-    if (el.fieldNewCat) el.fieldNewCat.value = '';
-    renderTagPreview();
-    renderNoteCategories();
+    if (el.fieldA) el.fieldA.value = '';
+    if (el.fieldB) el.fieldB.value = '';
+    if (el.fieldExtra) el.fieldExtra.value = '';
+    renderCoverTypes();
+    showNoteStep();
     el.noteCover.innerHTML = '';
     var canvas = document.createElement('canvas');
     el.noteCover.appendChild(canvas);
@@ -607,22 +698,23 @@
     if (!item) return;
 
     if (!skip) {
-      var tags = parseTags(el.fieldTags.value);
-      var category = (state.noteCategory || '').trim();
-      if (category.length > 20) category = category.slice(0, 20);
+      var type = coverTypeById(state.coverType);
+      if (!type) return;
       var record = {
         id: uid(),
         imageBlob: item.blob,
         width: item.width,
         height: item.height,
+        coverType: type.id,
+        headline: el.fieldHeadline ? (el.fieldHeadline.value || '').trim() : '',
         whyClick: (el.fieldWhy.value || '').trim(),
-        feeling: (el.fieldFeeling.value || '').trim(),
-        structure: (el.fieldStructure.value || '').trim(),
-        learnable: (el.fieldLearn.value || '').trim(),
-        tags: tags,
-        category: category,
+        extra: el.fieldExtra ? (el.fieldExtra.value || '').trim() : '',
+        tags: [],
+        category: type.name,
         createdAt: Date.now()
       };
+      record[type.a.key] = el.fieldA ? (el.fieldA.value || '').trim() : '';
+      record[type.b.key] = el.fieldB ? (el.fieldB.value || '').trim() : '';
       try {
         var db = await openDb();
         await idbPut(db, record);
@@ -831,8 +923,8 @@
       var h = item && item.height ? item.height : 0;
       btn.style.aspectRatio = (w > 0 && h > 0) ? (w + ' / ' + h) : '3 / 4';
     }
-    var label = recordCategory(item);
-    if (item.feeling) label += '，' + item.feeling;
+    var label = item.headline || item.whyClick || recordCategory(item);
+    if (item.feeling && !item.coverType) label += '，' + item.feeling;
     btn.setAttribute('aria-label', label || '封面');
     var canvas = document.createElement('canvas');
     btn.appendChild(canvas);
@@ -994,6 +1086,17 @@
   }
 
   function sheetSnapshot(item) {
+    var type = coverTypeById(item && item.coverType);
+    if (type) {
+      var snap = {
+        headline: String(item.headline || ''),
+        whyClick: String(item.whyClick || ''),
+        extra: String(item.extra || '')
+      };
+      snap[type.a.key] = String(item[type.a.key] || '');
+      snap[type.b.key] = String(item[type.b.key] || '');
+      return snap;
+    }
     return {
       category: recordCategory(item),
       whyClick: String(item.whyClick || ''),
@@ -1011,11 +1114,11 @@
     var base = state.sheetBase;
     var draft = state.sheetDraft;
     if (!base || !draft) return false;
-    return sheetNorm(draft.category) !== sheetNorm(base.category)
-      || sheetNorm(draft.whyClick) !== sheetNorm(base.whyClick)
-      || sheetNorm(draft.feeling) !== sheetNorm(base.feeling)
-      || sheetNorm(draft.structure) !== sheetNorm(base.structure)
-      || sheetNorm(draft.learnable) !== sheetNorm(base.learnable);
+    var keys = Object.keys(base);
+    for (var i = 0; i < keys.length; i++) {
+      if (sheetNorm(draft[keys[i]]) !== sheetNorm(base[keys[i]])) return true;
+    }
+    return false;
   }
 
   function syncSheetSaveBtn() {
@@ -1088,6 +1191,18 @@
   function fillSheetFields(item) {
     if (!el.sheetFields || !item || !state.sheetDraft) return;
     el.sheetFields.innerHTML = '';
+    var type = coverTypeById(item.coverType);
+    if (type) {
+      sheetAddField(el.sheetFields, '类型', type.name);
+      sheetAddEditor(el.sheetFields, '封面主文案', 'headline');
+      sheetAddEditor(el.sheetFields, '为什么想点', 'whyClick');
+      sheetAddEditor(el.sheetFields, type.a.label, type.a.key);
+      sheetAddEditor(el.sheetFields, type.b.label, type.b.key);
+      sheetAddEditor(el.sheetFields, '补充想法', 'extra');
+      sheetAddField(el.sheetFields, '保存', formatSavedAt(item.createdAt));
+      syncSheetSaveBtn();
+      return;
+    }
     sheetAddEditor(el.sheetFields, '为何想点', 'whyClick');
     sheetAddEditor(el.sheetFields, '感觉', 'feeling');
     sheetAddEditor(el.sheetFields, '结构亮点', 'structure');
@@ -1146,21 +1261,18 @@
   function commitSheetEdits() {
     var item = libraryItemById(state.sheetId);
     if (!item || !state.sheetDraft || !isSheetDirty()) return;
-    var prev = {
-      category: item.category,
-      whyClick: item.whyClick,
-      feeling: item.feeling,
-      structure: item.structure,
-      learnable: item.learnable
-    };
     var draft = state.sheetDraft;
-    item.whyClick = sheetNorm(draft.whyClick);
-    item.feeling = sheetNorm(draft.feeling);
-    item.structure = sheetNorm(draft.structure);
-    item.learnable = sheetNorm(draft.learnable);
-    if (sheetNorm(draft.category) !== sheetNorm(state.sheetBase.category)) {
-      item.category = sheetNorm(draft.category);
-    }
+    var prev = {};
+    Object.keys(draft).forEach(function (key) {
+      prev[key] = item[key];
+      if (key === 'category') {
+        if (sheetNorm(draft.category) !== sheetNorm(state.sheetBase.category)) {
+          item.category = sheetNorm(draft.category);
+        }
+      } else {
+        item[key] = sheetNorm(draft[key]);
+      }
+    });
     (state.sheetExtraCats || []).forEach(rememberCategory);
     openDb().then(function (db) {
       return idbPut(db, item).then(function () {
@@ -1173,11 +1285,9 @@
         renderLibrary();
       });
     }).catch(function () {
-      item.category = prev.category;
-      item.whyClick = prev.whyClick;
-      item.feeling = prev.feeling;
-      item.structure = prev.structure;
-      item.learnable = prev.learnable;
+      Object.keys(prev).forEach(function (key) {
+        item[key] = prev[key];
+      });
       alert('保存失败');
     });
   }
@@ -1323,15 +1433,20 @@
     el.askOk = $('ask-ok');
     el.askBackdrop = $('ask-backdrop');
     el.noteCover = $('note-cover-preview');
+    el.noteType = $('note-type');
+    el.noteTypeList = $('note-type-list');
+    el.btnTypeBack = $('btn-type-back');
     el.noteForm = $('note-form');
+    el.fieldHeadline = $('field-headline');
     el.fieldWhy = $('field-why');
-    el.fieldFeeling = $('field-feeling');
-    el.fieldStructure = $('field-structure');
-    el.fieldLearn = $('field-learn');
-    el.fieldTags = $('field-tags');
-    el.tagPreview = $('tag-preview');
+    el.fieldA = $('field-a');
+    el.fieldB = $('field-b');
+    el.fieldALabel = $('field-a-label');
+    el.fieldBLabel = $('field-b-label');
+    el.fieldExtra = $('field-extra');
     el.noteProgress = $('note-progress');
     el.btnNoteSkip = $('btn-note-skip');
+    el.btnNoteSkipType = $('btn-note-skip-type');
     el.libraryRows = $('library-rows');
     el.libraryEmpty = $('library-empty');
     el.libScroll = $('lib-scroll');
@@ -1392,24 +1507,20 @@
       saveCurrentNote(true);
     });
 
-    el.fieldTags.addEventListener('input', function () {
-      renderTagPreview();
-    });
-
-    if (el.btnAddCat) {
-      el.btnAddCat.addEventListener('click', function () {
-        addNoteCategory();
+    if (el.btnNoteSkipType) {
+      el.btnNoteSkipType.addEventListener('click', function () {
+        saveCurrentNote(true);
       });
     }
 
-    if (el.fieldNewCat) {
-      el.fieldNewCat.addEventListener('keydown', function (ev) {
-        if (ev.key === 'Enter') {
-          ev.preventDefault();
-          addNoteCategory();
-        }
+    if (el.btnTypeBack) {
+      el.btnTypeBack.addEventListener('click', function () {
+        clearCoverType();
       });
     }
+
+    renderCoverTypes();
+    showNoteStep();
 
     if (el.sheetBackdrop) {
       el.sheetBackdrop.addEventListener('click', function () {

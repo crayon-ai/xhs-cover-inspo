@@ -1133,6 +1133,58 @@ html.is-library body {
     0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 
+.note-type__k {
+  margin: 2px 2px 12px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: rgba(26, 26, 26, 0.4);
+}
+
+.note-type__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.note-type__btn {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 16px;
+  border: 1px solid rgba(26, 26, 26, 0.16);
+  background: #ffffff;
+  color: #1a1a1a;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: left;
+  padding: 0 16px;
+  cursor: pointer;
+}
+
+.note-type__btn.is-on {
+  background: #1a1a1a;
+  color: #ffffff;
+  border-color: #1a1a1a;
+}
+
+.note-type__btn:active { transform: scale(0.99); }
+
+.note-type-current {
+  align-self: flex-start;
+  margin: 0 0 4px;
+  border: 0;
+  background: #1a1a1a;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.note-skip--type { display: block; margin: 18px auto 0; }
+
 .note-form {
   display: flex;
   flex-direction: column;
