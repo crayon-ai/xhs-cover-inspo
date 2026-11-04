@@ -2027,8 +2027,13 @@ html.is-note body {
 
 .ask {
   position: fixed;
-  z-index: 60;
+  z-index: 200; /* 高于 img-viewer(30) / lib-sheet(40) / 面板 95，确认弹层永远最上层 */
 }
+
+/* 开窗武装期：按钮暂时不可点，吞掉开窗瞬间的幽灵 click */
+.ask.is-arming .sheet-confirm__backdrop,
+.ask.is-arming .sheet-confirm__cancel,
+.ask.is-arming .sheet-confirm__ok { pointer-events: none; }
 
 .lib-sheet__delete {
   display: block;
