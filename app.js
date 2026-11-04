@@ -335,12 +335,12 @@
     return runs;
   }
 
-  function cardRunsAtRow(data, imgW, y) {
+  function cardRunsInXRange(data, imgW, y, x0, x1) {
     var runs = [];
     var start = -1;
-    for (var x = 0; x <= imgW; x++) {
+    for (var x = x0; x <= x1 + 1; x++) {
       var on = false;
-      if (x < imgW) {
+      if (x <= x1 && x < imgW) {
         var i = (y * imgW + x) * 4;
         on = (data[i] + data[i + 1] + data[i + 2]) / 3 >= 253;
       }
@@ -356,6 +356,10 @@
       if (runs[r].w >= minW) cards.push(runs[r]);
     }
     return cards;
+  }
+
+  function cardRunsAtRow(data, imgW, y) {
+    return cardRunsInXRange(data, imgW, y, 0, imgW - 1);
   }
 
   function textRunsInBand(data, imgW, imgH, band, x0, x1) {
@@ -396,53 +400,147 @@
     return runs;
   }
 
-  function detectCardTiles(data, imgW, imgH) {
-    var gut = findGutterRuns(data, imgW, imgH);
-    if (gut.length < 2) return [];
-    var tiles = [];
-    for (var g = 0; g + 1 < gut.length; g++) {
-      var band = { y0: gut[g].y1 + 1, y1: gut[g + 1].y0 - 1 };
-      var bandH = band.y1 - band.y0 + 1;
-      // Measure card x-extents on the whitest background row of the band.
-      var best = null;
-      for (var y = band.y0; y <= band.y1; y++) {
-        var rs = cardRunsAtRow(data, imgW, y);
-        var tw = 0;
-        for (var r = 0; r < rs.length; r++) tw += rs[r].w;
-        if (!best || tw > best.tw) best = { tw: tw, rs: rs };
+  // Column-local gutter fraction: share of ~250 pixels inside [x0, x1] only.
+  function gutterFracInXRange(data, imgW, y, x0, x1) {
+    var cnt = 0;
+    var total = 0;
+    for (var x = x0; x <= x1; x += PROJ_STEP) {
+      total++;
+      var i = (y * imgW + x) * 4;
+      var v = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      if (v >= 248 && v <= 252) cnt++;
+    }
+    return cnt / total;
+  }
+
+  // Vertical gutters: columns that are ~250 down most of the image. In a
+  // staggered waterfall these separate the card columns; the page margins
+  // show up as narrow edge gutters too and are dropped by the width filter.
+  function findColGutters(data, imgW, imgH) {
+    var minW = Math.max(3, Math.round(imgW * 0.01));
+    var runs = [];
+    var start = -1;
+    for (var x = 0; x <= imgW; x++) {
+      var on = false;
+      if (x < imgW) {
+        var cnt = 0;
+        var total = 0;
+        for (var y = 0; y < imgH; y += PROJ_STEP) {
+          total++;
+          var i = (y * imgW + x) * 4;
+          var v = (data[i] + data[i + 1] + data[i + 2]) / 3;
+          if (v >= 248 && v <= 252) cnt++;
+        }
+        on = cnt / total > 0.5;
       }
-      if (!best) continue;
-      for (r = 0; r < best.rs.length; r++) {
-        var card = best.rs[r];
-        // Bands shorter than a realistic card (chrome strips) are not cards.
-        if (bandH < card.w * 0.6) continue;
-        var runs = textRunsInBand(data, imgW, imgH, band, card.x0, card.x1);
-        // Need author/like row + at least one title line to anchor the cut.
-        if (runs.length < 2) continue;
-        var pad = Math.round(card.w * 0.055);
-        // Walk upward from the last run (author/like row): up to 2 short
-        // title lines with small gaps, then locate the cover bottom.
-        var idx = runs.length - 1;
-        var titleTop = -1;
-        var lines = 0;
-        while (lines < 2 && idx - 1 >= 0) {
-          var cand = runs[idx - 1];
-          if (runs[idx].y0 - cand.y1 > pad * 1.5) break;
-          if (cand.y1 - cand.y0 + 1 > pad * 1.6) break;
-          titleTop = cand.y0;
-          idx--;
-          lines++;
-        }
-        if (titleTop < 0) continue;
-        var coverBottom;
-        if (idx - 1 >= 0 && titleTop - runs[idx - 1].y1 <= pad * 1.5) {
-          // Non-white cover ends right above the title: snap to its bottom.
-          coverBottom = runs[idx - 1].y1;
-        } else {
-          coverBottom = titleTop - pad;
-        }
-        if (coverBottom <= band.y0) continue;
-        tiles.push({ x: card.x0, w: card.w, y0: band.y0, y1: coverBottom, band: band });
+      if (on && start < 0) start = x;
+      if (!on && start >= 0) {
+        if (x - start >= minW) runs.push({ x0: start, x1: x - 1 });
+        start = -1;
+      }
+    }
+    return runs;
+  }
+
+  function findGutterRunsInCol(data, imgW, imgH, x0, x1) {
+    var minLen = Math.max(4, Math.round(imgH * 0.002));
+    var runs = [];
+    var start = -1;
+    for (var y = 0; y <= imgH; y++) {
+      // Stricter than the full-width test: near-white rows INSIDE a light
+      // cover can reach ~0.97 of the column in the gutter range, while a
+      // real page-gutter row is a clean run of ~250 (fraction ~1.0).
+      var on = y < imgH && gutterFracInXRange(data, imgW, y, x0, x1) > 0.97;
+      if (on && start < 0) start = y;
+      if (!on && start >= 0) {
+        if (y - start >= minLen) runs.push({ y0: start, y1: y - 1 });
+        start = -1;
+      }
+    }
+    return runs;
+  }
+
+  // Detect complete cards inside one band (bounded above and below by
+  // gutter rows) within the x-range [bx0, bx1]: measure card x-extents on
+  // the whitest background row of the band, then cut each cover at its
+  // title block.
+  function cardTilesInBand(data, imgW, imgH, band, bx0, bx1) {
+    var bandH = band.y1 - band.y0 + 1;
+    var best = null;
+    for (var y = band.y0; y <= band.y1; y++) {
+      var rs = cardRunsInXRange(data, imgW, y, bx0, bx1);
+      var tw = 0;
+      for (var r = 0; r < rs.length; r++) tw += rs[r].w;
+      if (!best || tw > best.tw) best = { tw: tw, rs: rs };
+    }
+    if (!best) return [];
+    var tiles = [];
+    for (r = 0; r < best.rs.length; r++) {
+      var card = best.rs[r];
+      // Bands shorter than a realistic card (chrome strips) are not cards.
+      if (bandH < card.w * 0.6) continue;
+      var runs = textRunsInBand(data, imgW, imgH, band, card.x0, card.x1);
+      // Need author/like row + at least one title line to anchor the cut.
+      if (runs.length < 2) continue;
+      var pad = Math.round(card.w * 0.055);
+      // Walk upward from the last run (author/like row): up to 2 short
+      // title lines with small gaps, then locate the cover bottom.
+      var idx = runs.length - 1;
+      var titleTop = -1;
+      var lines = 0;
+      while (lines < 2 && idx - 1 >= 0) {
+        var cand = runs[idx - 1];
+        if (runs[idx].y0 - cand.y1 > pad * 1.5) break;
+        if (cand.y1 - cand.y0 + 1 > pad * 1.6) break;
+        titleTop = cand.y0;
+        idx--;
+        lines++;
+      }
+      if (titleTop < 0) continue;
+      var coverBottom;
+      if (idx - 1 >= 0 && titleTop - runs[idx - 1].y1 <= pad * 1.5) {
+        // Non-white cover ends right above the title: snap to its bottom.
+        coverBottom = runs[idx - 1].y1;
+      } else {
+        coverBottom = titleTop - pad;
+      }
+      if (coverBottom <= band.y0) continue;
+      tiles.push({ x: card.x0, w: card.w, y0: band.y0, y1: coverBottom, band: band });
+    }
+    return tiles;
+  }
+
+  function detectCardTiles(data, imgW, imgH) {
+    var tiles = [];
+    var gut = findGutterRuns(data, imgW, imgH);
+    if (gut.length >= 2) {
+      // Full-width gutters: rows of page gutter spanning the whole image.
+      for (var g = 0; g + 1 < gut.length; g++) {
+        var band = { y0: gut[g].y1 + 1, y1: gut[g + 1].y0 - 1 };
+        tiles = tiles.concat(cardTilesInBand(data, imgW, imgH, band, 0, imgW - 1));
+      }
+      return tiles;
+    }
+    // Staggered waterfall: horizontal gutters exist per column only and
+    // never span the full width. Detect the card columns from vertical
+    // ~250 gutters, then run the same band logic per column.
+    var vgs = findColGutters(data, imgW, imgH);
+    if (!vgs.length) return [];
+    var edges = [0];
+    for (var v = 0; v < vgs.length; v++) {
+      edges.push(vgs[v].x0, vgs[v].x1 + 1);
+    }
+    edges.push(imgW);
+    var minColW = Math.round(imgW * 0.2);
+    for (var e = 0; e + 1 < edges.length; e += 2) {
+      var cx0 = edges[e];
+      var cx1 = edges[e + 1] - 1;
+      if (cx1 - cx0 + 1 < minColW) continue;
+      var cg = findGutterRunsInCol(data, imgW, imgH, cx0, cx1);
+      if (cg.length < 2) continue;
+      for (var g2 = 0; g2 + 1 < cg.length; g2++) {
+        var band2 = { y0: cg[g2].y1 + 1, y1: cg[g2 + 1].y0 - 1 };
+        tiles = tiles.concat(cardTilesInBand(data, imgW, imgH, band2, cx0, cx1));
       }
     }
     return tiles;
