@@ -2326,6 +2326,15 @@ html.is-note body {
   animation: viewer-out 210ms var(--ease-out) both;
 }
 
+/* 加固：查看器内一切元素禁止选区/长按菜单/拖拽（夸克等无视容器级 callout） */
+.img-viewer,
+.img-viewer * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+
 #viewer-canvas {
   max-width: 88vw;
   max-height: 74vh;
