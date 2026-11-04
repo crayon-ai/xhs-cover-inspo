@@ -24,7 +24,9 @@
     sheetId: null,
     sheetBase: null,
     sheetDraft: null,
-    sheetExtraCats: []
+    sheetExtraCats: [],
+    viewerId: null,
+    viewerIndex: -1
   };
 
   var el = {};
@@ -148,7 +150,10 @@
       document.body.classList.toggle('is-note', onNote);
       document.body.classList.toggle('is-dark-chrome', darkChrome);
     }
-    if (!onLibrary) closeLibrarySheet();
+    if (!onLibrary) {
+      closeLibrarySheet();
+      closeViewer();
+    }
   }
 
   function revokeUrls(list) {
@@ -720,6 +725,7 @@
         extra: el.fieldExtra ? (el.fieldExtra.value || '').trim() : '',
         tags: [],
         category: type.name,
+        liked: false,
         createdAt: Date.now()
       };
       record[type.a.key] = el.fieldA ? (el.fieldA.value || '').trim() : '';
@@ -938,6 +944,13 @@
     btn.setAttribute('aria-label', label || '封面');
     var canvas = document.createElement('canvas');
     btn.appendChild(canvas);
+    if (item.liked) {
+      var heart = document.createElement('span');
+      heart.className = 'lib-card__like';
+      heart.setAttribute('aria-label', '已喜欢');
+      heart.appendChild(svgIcon('heart-fill'));
+      btn.appendChild(heart);
+    }
     var originX = 0;
     var originY = 0;
     var moved = false;
@@ -951,7 +964,7 @@
     });
     btn.addEventListener('click', function () {
       if (moved) return;
-      openLibrarySheet(item);
+      openViewer(item, btn.getBoundingClientRect());
     });
     if (item.imageBlob) {
       paintBlobToCanvas(item.imageBlob, canvas).catch(function () {});
@@ -1345,6 +1358,436 @@
     if (el.sheetPanel) el.sheetPanel.style.transform = '';
     if (dy > 72) closeLibrarySheet();
   }
+
+  // ——— Fullscreen viewer + long-press action ring ———
+  // 点击库卡片进入全屏查看（纯图无文字）；长按 350ms 从按压点弹出
+  // 喜欢/导出/查看描述三个圆形按钮，按住拖动时按钮围绕手指重排，
+  // 离手指最近的按钮放大反色，松手在其上即触发。
+
+  var LONGPRESS_MS = 350;
+  var RING_RADIUS = 86;    // 按压点到按钮中心距离
+  var RING_ARC = 50;       // 相邻按钮夹角
+  var RING_SIZE = 48;      // 按钮直径
+  var RING_FOLLOW = 170;   // 手指滑出此半径后，操作环整体重新锚定到手指
+  var RING_TRIGGER_MAX = 170; // 松手时与选中按钮的最大距离，超过则视为取消
+
+  var viewerPress = null;  // {x,y,t,moved,long,timer,id}
+  var ringState = null;    // {px,py,hot,buttons,targets}
+  var toastTimer = 0;
+
+  function viewerItem() {
+    return libraryItemById(state.viewerId);
+  }
+
+  function svgIcon(kind) {
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    if (kind === 'heart-fill') {
+      // 圆润软心（2026-11-04 用户选定），随容器 currentColor 上色
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('aria-hidden', 'true');
+      var hf = document.createElementNS(ns, 'path');
+      hf.setAttribute('fill', 'currentColor');
+      hf.setAttribute('d', 'M12 20.7c-.42 0-.84-.15-1.17-.44C6.5 16.6 2.6 13.1 2.6 9.1 2.6 6.2 4.8 4.1 7.4 4.1c1.86 0 3.55 1.03 4.6 2.72 1.05-1.69 2.74-2.72 4.6-2.72 2.6 0 4.8 2.1 4.8 5 0 4-3.9 7.5-8.43 11.16-.33.29-.75.44-1.17.44z');
+      svg.appendChild(hf);
+      return svg;
+    }
+    svg.setAttribute('viewBox', '0 0 20 20');
+    svg.setAttribute('aria-hidden', 'true');
+    var p = document.createElementNS(ns, 'path');
+    if (kind === 'like') {
+      p.setAttribute('d', 'M10 16.6S3.6 12.4 1.9 8.4C.9 6 2.4 3.4 5 3.4c1.9 0 3.4 1.1 5 3 1.6-1.9 3.1-3 5-3 2.6 0 4.1 2.6 3.1 5-1.7 4-8.1 8.2-8.1 8.2z');
+    } else if (kind === 'export') {
+      p.setAttribute('d', 'M10 12.3V3.6M6.4 7.2 10 3.6l3.6 3.6M4.6 12.5v3.1a1 1 0 0 0 1 1h8.8a1 1 0 0 0 1-1v-3.1');
+    } else {
+      p.setAttribute('d', 'M4.6 4.2h10.8c.7 0 1.2.5 1.2 1.2v6.2c0 .7-.5 1.2-1.2 1.2H9.4l-3.6 3v-3H4.6c-.7 0-1.2-.5-1.2-1.2V5.4c0-.7.5-1.2 1.2-1.2z');
+    }
+    p.setAttribute('fill', 'none');
+    p.setAttribute('stroke', 'currentColor');
+    p.setAttribute('stroke-width', '1.6');
+    p.setAttribute('stroke-linecap', 'round');
+    p.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(p);
+    return svg;
+  }
+
+  function fitViewerCanvas(canvas) {
+    var vw = canvas.width;
+    var vh = canvas.height;
+    if (!vw || !vh) return null;
+    var maxW = window.innerWidth * 0.88;
+    var maxH = window.innerHeight * 0.74;
+    var s = Math.min(maxW / vw, maxH / vh);
+    return { w: Math.round(vw * s), h: Math.round(vh * s) };
+  }
+
+  function paintViewerCanvas(item) {
+    if (!el.viewerCanvas || !item) return;
+    el.viewerCanvas.style.opacity = '0';
+    if (!item.imageBlob) {
+      el.viewerCanvas.style.opacity = '';
+      return;
+    }
+    paintBlobToCanvas(item.imageBlob, el.viewerCanvas).then(function () {
+      if (!el.viewerCanvas) return;
+      var fit = fitViewerCanvas(el.viewerCanvas);
+      if (fit) {
+        el.viewerCanvas.style.width = fit.w + 'px';
+        el.viewerCanvas.style.height = fit.h + 'px';
+      }
+      el.viewerCanvas.style.opacity = '';
+    }).catch(function () {
+      if (el.viewerCanvas) el.viewerCanvas.style.opacity = '';
+    });
+  }
+
+  function syncViewerLike(item) {
+    if (el.viewerLike) el.viewerLike.hidden = !(item && item.liked);
+  }
+
+  function openViewer(item, fromRect) {
+    if (!el.imgViewer || !item || !item.imageBlob) return;
+    hideTabs();
+    dismissRing();
+    state.viewerId = item.id;
+    var list = state.library || [];
+    state.viewerIndex = list.indexOf(item);
+    paintViewerCanvas(item);
+    syncViewerLike(item);
+    if (el.viewerCanvas) el.viewerCanvas.style.transform = '';
+    el.imgViewer.hidden = false;
+
+    // FLIP：从被点击卡片的位置放大到屏幕中心
+    if (fromRect && el.viewerCanvas && el.viewerCanvas.width) {
+      var fit = fitViewerCanvas(el.viewerCanvas);
+      if (fit) {
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        var sx = fromRect.width / fit.w;
+        var sy = fromRect.height / fit.h;
+        var dx = fromRect.left + fromRect.width / 2 - vw / 2;
+        var dy = fromRect.top + fromRect.height / 2 - vh / 2;
+        el.viewerCanvas.style.transition = 'none';
+        el.viewerCanvas.style.transform =
+          'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px) scale(' +
+          sx.toFixed(3) + ',' + sy.toFixed(3) + ')';
+        if (window.requestAnimationFrame) {
+          window.requestAnimationFrame(function () {
+            if (!el.viewerCanvas) return;
+            el.viewerCanvas.style.transition = '';
+            el.viewerCanvas.style.transform = '';
+          });
+        } else {
+          el.viewerCanvas.style.transition = '';
+          el.viewerCanvas.style.transform = '';
+        }
+      }
+    }
+  }
+
+  function closeViewer() {
+    if (!state.viewerId || !el.imgViewer || el.imgViewer.hidden) return;
+    dismissRing();
+    if (viewerPress && viewerPress.timer) clearTimeout(viewerPress.timer);
+    viewerPress = null;
+    state.viewerId = null;
+    el.imgViewer.classList.add('is-closing');
+    setTimeout(function () {
+      if (!state.viewerId && el.imgViewer) {
+        el.imgViewer.hidden = true;
+        el.imgViewer.classList.remove('is-closing');
+        if (el.viewerCanvas) el.viewerCanvas.style.transform = '';
+      }
+    }, 210);
+  }
+
+  function navigateViewer(dir) {
+    var list = state.library || [];
+    if (!list.length) return;
+    var next = state.viewerIndex + dir;
+    if (next < 0 || next >= list.length) return;
+    state.viewerIndex = next;
+    var item = list[next];
+    state.viewerId = item.id;
+    paintViewerCanvas(item);
+    syncViewerLike(item);
+  }
+
+  // —— 操作环 ——
+
+  function buildRingButtons() {
+    el.actionRing.innerHTML = '';
+    var defs = [
+      { key: 'like', label: '喜欢' },
+      { key: 'export', label: '导出' },
+      { key: 'desc', label: '查看描述' }
+    ];
+    return defs.map(function (d) {
+      var b = document.createElement('span');
+      b.className = 'ring-btn';
+      b.setAttribute('role', 'button');
+      b.setAttribute('aria-label', d.label);
+      b.appendChild(svgIcon(d.key));
+      el.actionRing.appendChild(b);
+      return { key: d.key, el: b };
+    });
+  }
+
+  // 按压点在中下部时扇形朝上展开，在上部时朝下；方向在触发时锁定
+  function ringTargets(px, py, base) {
+    var m = RING_SIZE / 2 + 10;
+    var topM = 64;
+    var bottomM = m + 26;
+    var keys = ['like', 'export', 'desc'];
+    return keys.map(function (key, i) {
+      var ang = (base + (i - 1) * RING_ARC) * Math.PI / 180;
+      var x = px + Math.cos(ang) * RING_RADIUS;
+      var y = py + Math.sin(ang) * RING_RADIUS;
+      x = Math.min(window.innerWidth - m, Math.max(m, x));
+      y = Math.min(window.innerHeight - bottomM, Math.max(topM, y));
+      return { key: key, x: x, y: y };
+    });
+  }
+
+  function placeRing(targets, hotKey, entering) {
+    if (!ringState) return;
+    ringState.targets = targets;
+    targets.forEach(function (t, i) {
+      var b = ringState.buttons[i];
+      if (!b) return;
+      var s = hotKey === t.key ? 1.38 : 1;
+      b.el.style.transitionDelay = entering ? (i * 40) + 'ms' : '0ms';
+      b.el.style.opacity = '1';
+      b.el.style.transform =
+        'translate3d(' + (t.x - RING_SIZE / 2) + 'px,' + (t.y - RING_SIZE / 2) + 'px,0) scale(' + s + ')';
+      b.el.classList.toggle('is-hot', hotKey === t.key);
+    });
+  }
+
+  function fireRing(px, py) {
+    if (!el.actionRing || !state.viewerId) return;
+    try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+    var base = py > window.innerHeight * 0.45 ? -90 : 90;
+    ringState = {
+      px: px,
+      py: py,
+      base: base,
+      anchorX: px,
+      anchorY: py,
+      hot: null,
+      buttons: buildRingButtons(),
+      targets: null
+    };
+    el.actionRing.hidden = false;
+    ringState.buttons.forEach(function (b, i) {
+      b.el.style.transitionDelay = (i * 40) + 'ms';
+      b.el.style.opacity = '0';
+      b.el.style.transform =
+        'translate3d(' + (px - RING_SIZE / 2) + 'px,' + (py - RING_SIZE / 2) + 'px,0) scale(0.2)';
+    });
+    var targets = ringTargets(px, py, base);
+    if (window.requestAnimationFrame) {
+      window.requestAnimationFrame(function () {
+        placeRing(targets, null, true);
+      });
+    } else {
+      placeRing(targets, null, true);
+    }
+  }
+
+  function updateRing(px, py) {
+    if (!ringState) return;
+    ringState.px = px;
+    ringState.py = py;
+    // 按钮以按压点为锚静止；手指滑远后整个环重新锚定到手指（方向不变）
+    var far = Math.hypot(px - ringState.anchorX, py - ringState.anchorY) > RING_FOLLOW;
+    if (far) {
+      ringState.anchorX = px;
+      ringState.anchorY = py;
+    }
+    var targets = ringTargets(ringState.anchorX, ringState.anchorY, ringState.base);
+    // 离手指最近的按钮即选中（任意时刻恰有一个高亮）
+    var hot = null;
+    var best = Infinity;
+    targets.forEach(function (t) {
+      var d = Math.hypot(t.x - px, t.y - py);
+      if (d < best) {
+        best = d;
+        hot = t.key;
+      }
+    });
+    ringState.hot = hot;
+    ringState.hotDist = best;
+    placeRing(targets, hot, false);
+  }
+
+  function dismissRing() {
+    if (!el.actionRing) return;
+    if (!ringState) {
+      el.actionRing.hidden = true;
+      return;
+    }
+    var buttons = ringState.buttons;
+    var targets = ringState.targets;
+    ringState = null;
+    buttons.forEach(function (b, i) {
+      var t = targets ? targets[i] : null;
+      b.el.style.transitionDelay = '0ms';
+      b.el.style.opacity = '0';
+      b.el.style.transform = t
+        ? 'translate3d(' + (t.x - RING_SIZE / 2) + 'px,' + (t.y - RING_SIZE / 2) + 'px,0) scale(0.35)'
+        : 'scale(0.35)';
+    });
+    setTimeout(function () {
+      if (!ringState && el.actionRing) {
+        el.actionRing.hidden = true;
+        el.actionRing.innerHTML = '';
+      }
+    }, 190);
+  }
+
+  function resolveRing() {
+    var st = ringState;
+    if (!st) return;
+    var hot = st.hot;
+    var hotDist = st.hotDist;
+    dismissRing();
+    // 手指离选中按钮过远时视为取消，避免误触
+    if (!hot || hotDist > RING_TRIGGER_MAX) return;
+    if (hot === 'like') ringLike();
+    else if (hot === 'export') ringExport();
+    else if (hot === 'desc') ringDesc();
+  }
+
+  // —— 三个动作 ——
+
+  function ringLike() {
+    var item = viewerItem();
+    if (!item) return;
+    item.liked = !item.liked;
+    syncViewerLike(item);
+    renderLibrary();
+    openDb().then(function (db) {
+      return idbPut(db, item).then(function () { db.close(); });
+    }).catch(function () {
+      item.liked = !item.liked;
+      syncViewerLike(item);
+      renderLibrary();
+      alert('保存失败');
+    });
+  }
+
+  function exportFileName() {
+    var d = new Date();
+    function p(n) { return n < 10 ? '0' + n : '' + n; }
+    return '封面-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
+      '-' + p(d.getHours()) + p(d.getMinutes()) + '.jpg';
+  }
+
+  function ringExport() {
+    var item = viewerItem();
+    if (!item || !item.imageBlob) return;
+    var canvas = document.createElement('canvas');
+    paintBlobToCanvas(item.imageBlob, canvas).then(function () {
+      canvasToBlob(canvas, 'image/jpeg', 0.92).then(function (blob) {
+        if (!blob) {
+          showViewerToast('导出失败');
+          return;
+        }
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = exportFileName();
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+        showViewerToast('已保存');
+      });
+    }).catch(function () {
+      showViewerToast('导出失败');
+    });
+  }
+
+  function ringDesc() {
+    var item = viewerItem();
+    if (!item) return;
+    openLibrarySheet(item);
+  }
+
+  function showViewerToast(text) {
+    if (!el.viewerToast) return;
+    el.viewerToast.textContent = text;
+    el.viewerToast.hidden = false;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      toastTimer = 0;
+      if (el.viewerToast) el.viewerToast.hidden = true;
+    }, 1100);
+  }
+
+  // —— 查看器手势：点按关闭 / 横滑切换 / 长按呼出 ——
+
+  function onViewerPointerDown(ev) {
+    if (!state.viewerId || !el.imgViewer || el.imgViewer.hidden) return;
+    if (ev.target === el.viewerClose) return;
+    viewerPress = {
+      x: ev.clientX,
+      y: ev.clientY,
+      t: Date.now(),
+      moved: false,
+      id: ev.pointerId,
+      timer: 0
+    };
+    if (el.imgViewer.setPointerCapture) {
+      try { el.imgViewer.setPointerCapture(ev.pointerId); } catch (e) {}
+    }
+    viewerPress.timer = setTimeout(function () {
+      if (!viewerPress || viewerPress.moved) return;
+      fireRing(viewerPress.x, viewerPress.y);
+    }, LONGPRESS_MS);
+  }
+
+  function onViewerPointerMove(ev) {
+    if (!viewerPress || ev.pointerId !== viewerPress.id) return;
+    if (ringState) {
+      updateRing(ev.clientX, ev.clientY);
+      return;
+    }
+    var dx = ev.clientX - viewerPress.x;
+    var dy = ev.clientY - viewerPress.y;
+    if (!viewerPress.moved && Math.hypot(dx, dy) > 10) {
+      viewerPress.moved = true;
+      if (viewerPress.timer) clearTimeout(viewerPress.timer);
+    }
+  }
+
+  function onViewerPointerUp(ev) {
+    if (!viewerPress || ev.pointerId !== viewerPress.id) return;
+    var p = viewerPress;
+    viewerPress = null;
+    if (p.timer) clearTimeout(p.timer);
+    if (ringState) {
+      resolveRing();
+      return;
+    }
+    var dx = ev.clientX - p.x;
+    var dy = ev.clientY - p.y;
+    if (!p.moved && Date.now() - p.t < LONGPRESS_MS) {
+      closeViewer();
+      return;
+    }
+    if (p.moved && Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      navigateViewer(dx < 0 ? 1 : -1);
+    }
+  }
+
+  function onViewerPointerCancel() {
+    if (viewerPress && viewerPress.timer) clearTimeout(viewerPress.timer);
+    viewerPress = null;
+    dismissRing();
+  }
+
 
   async function onFilesChosen(fileList) {
     var files = Array.prototype.slice.call(fileList || []).filter(function (f) {
@@ -1811,6 +2254,12 @@
     el.sheetConfirmOk = $('sheet-confirm-ok');
     el.sheetConfirmBackdrop = $('sheet-confirm-backdrop');
     el.btnRepick = $('btn-repick');
+    el.imgViewer = $('img-viewer');
+    el.viewerCanvas = $('viewer-canvas');
+    el.viewerClose = $('viewer-close');
+    el.viewerLike = $('viewer-like');
+    el.actionRing = $('action-ring');
+    el.viewerToast = $('viewer-toast');
 
     qsAll('.tab').forEach(function (tab) {
       tab.addEventListener('click', function () {
@@ -1931,8 +2380,32 @@
       el.sheetHandle.addEventListener('pointercancel', onSheetPointerUp);
     }
 
+    if (el.imgViewer) {
+      el.imgViewer.addEventListener('pointerdown', onViewerPointerDown);
+      el.imgViewer.addEventListener('pointermove', onViewerPointerMove);
+      el.imgViewer.addEventListener('pointerup', onViewerPointerUp);
+      el.imgViewer.addEventListener('pointercancel', onViewerPointerCancel);
+      el.imgViewer.addEventListener('contextmenu', function (ev) {
+        ev.preventDefault();
+      });
+    }
+
+    if (el.viewerClose) {
+      el.viewerClose.addEventListener('click', function () {
+        closeViewer();
+      });
+    }
+
     document.addEventListener('keydown', function (ev) {
-      if (ev.key !== 'Escape' || !el.libSheet || el.libSheet.hidden) return;
+      if (ev.key !== 'Escape') return;
+      if (ringState) {
+        dismissRing();
+        return;
+      }
+      if (!el.libSheet || el.libSheet.hidden) {
+        if (state.viewerId) closeViewer();
+        return;
+      }
       if (el.sheetConfirm && !el.sheetConfirm.hidden) {
         hideSheetConfirm();
         return;
@@ -1970,6 +2443,7 @@
 
   function revealTabs() {
     if (!el.tabs) return;
+    if (state.viewerId) return; // 全屏查看时不弹出 Tab
     if (tabTimer) clearTimeout(tabTimer);
     el.tabs.hidden = false;
     if (window.requestAnimationFrame) {

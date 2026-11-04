@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>封面灵感收集</title>
-  <link rel="stylesheet" href="./styles.css?v=20261104h" />
+  <link rel="stylesheet" href="./styles.css?v=20261104i" />
 </head>
 <body>
   <nav class="tabs" id="tabs" aria-label="主导航" hidden>
@@ -124,6 +124,17 @@
 
   </div>
 
+  <!-- 全屏封面查看 · 长按呼出操作环（层级在 lib-sheet 之下） -->
+  <div id="img-viewer" class="img-viewer" hidden>
+    <canvas id="viewer-canvas" aria-label="封面预览"></canvas>
+    <span id="viewer-like" class="img-viewer__like" hidden aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 20.7c-.42 0-.84-.15-1.17-.44C6.5 16.6 2.6 13.1 2.6 9.1 2.6 6.2 4.8 4.1 7.4 4.1c1.86 0 3.55 1.03 4.6 2.72 1.05-1.69 2.74-2.72 4.6-2.72 2.6 0 4.8 2.1 4.8 5 0 4-3.9 7.5-8.43 11.16-.33.29-.75.44-1.17.44z"/></svg>
+    </span>
+    <button type="button" id="viewer-close" class="img-viewer__close" aria-label="关闭">×</button>
+    <div id="action-ring" class="action-ring" hidden aria-hidden="true"></div>
+    <div id="viewer-toast" class="viewer-toast" hidden aria-live="polite"></div>
+  </div>
+
   <div id="lib-sheet" class="lib-sheet" hidden>
     <button type="button" id="lib-sheet-backdrop" class="lib-sheet__backdrop" aria-label="关闭"></button>
     <div class="lib-sheet__panel" id="lib-sheet-panel" role="dialog" aria-modal="true" aria-label="封面笔记">
@@ -166,6 +177,6 @@
     </svg>
     已收入灵感库
   </div>
-  <script src="./app.js?v=20261104h"></script>
+  <script src="./app.js?v=20261104i"></script>
 </body>
 </html>
