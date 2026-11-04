@@ -211,6 +211,79 @@ html.is-library body {
   padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
 }
 
+/* Note page: same fixed shell as library — cover stays pinned, only fields scroll. */
+html.is-note,
+html.is-note body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #ffffff;
+}
+
+#app.is-note {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 480px;
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  margin: 0 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-bottom: 0;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  background: #ffffff;
+}
+
+#app.is-note main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#app.is-note #view-note.is-visible {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.note-stage {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.note-stage .note-progress,
+.note-stage .note-cover-wrap {
+  flex: none;
+}
+
+/* Scrollable field area: type list + form + skip button */
+.note-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+
 /* ——— Tabs · white capsule ——— */
 .tabs {
   position: fixed;

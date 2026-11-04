@@ -2034,6 +2034,7 @@
     bindScrollReveal(document.getElementById('app'));
     bindScrollReveal(document.getElementById('lib-scroll'));
     bindScrollReveal(document.getElementById('pick-rail'));
+    bindScrollReveal(document.getElementById('note-scroll'));
 
     if (el.askCancel) el.askCancel.addEventListener('click', closeAsk);
     if (el.askBackdrop) el.askBackdrop.addEventListener('click', closeAsk);
