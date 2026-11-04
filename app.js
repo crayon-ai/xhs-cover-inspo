@@ -670,8 +670,17 @@
     canvas.style.height = Math.max(1, Math.round(nh * scale)) + 'px';
   }
 
+  /** 是否队列最后一张（含队列只有 1 张）：noteIndex + 1 >= noteQueue.length */
+  function isLastNote() {
+    return state.noteIndex + 1 >= state.noteQueue.length;
+  }
+
   function fillNoteForm() {
     var item = state.noteQueue[state.noteIndex];
+    // 切到下一张：复位折痕预演状态与按钮文案
+    planeState = 'idle';
+    if (el.noteCoverWrap) el.noteCoverWrap.classList.remove('is-confirming');
+    if (el.btnNoteSave) el.btnNoteSave.textContent = '保存并下一张';
     el.noteProgress.textContent =
       (state.noteIndex + 1) + ' / ' + state.noteQueue.length;
     state.coverType = '';
@@ -719,6 +728,7 @@
         var db = await openDb();
         await idbPut(db, record);
         db.close();
+        demoTrackIds.push(record.id);
         state.library = [record].concat(
           (state.library || []).filter(function (x) { return x.id !== record.id; })
         );
@@ -1397,6 +1407,356 @@
     renderCandidates();
   }
 
+  /* ================= 折痕预演 · 纸飞机（记笔记确认动效） =================
+   * idle --保存并下一张(已选类型)--> confirming --确认保存--> animating
+   * animating: 折叠(~1s) → 贝塞尔飞行(~0.9s) → 落地反馈 → saveCurrentNote(false)
+   * 「跳过这张」/返回类型选择在 confirming 时只取消确认态，不触发动效。 */
+  var planeState = 'idle'; // idle -> confirming -> animating
+  var demoTrackIds = []; // 演示期间写入灵感库的记录 id，prepare 时清掉以便反复播放
+  var PLANE_W = 150;
+  var PLANE_H = 94;
+  var FLY_MS = 900;
+
+  function onNoteSubmit() {
+    if (planeState === 'animating') return;
+    if (planeState === 'confirming') { startFold(); return; }
+    if (!coverTypeById(state.coverType)) return; // 未选类型：维持原早退行为
+    // 折痕预演只在队列最后一张触发；非最后一张直接保存并切下一张
+    if (!isLastNote()) { saveCurrentNote(false); return; }
+    enterConfirm();
+  }
+
+  function enterConfirm() {
+    if (planeState !== 'idle') return;
+    if (!coverTypeById(state.coverType)) return;
+    planeState = 'confirming';
+    if (el.noteCoverWrap) el.noteCoverWrap.classList.add('is-confirming');
+    if (el.btnNoteSave) el.btnNoteSave.textContent = '确认保存';
+  }
+
+  function cancelConfirm() {
+    if (planeState !== 'confirming') return;
+    planeState = 'idle';
+    if (el.noteCoverWrap) el.noteCoverWrap.classList.remove('is-confirming');
+    if (el.btnNoteSave) el.btnNoteSave.textContent = '保存并下一张';
+  }
+
+  /** 折叠切片：以当前封面 canvas 为面，clip-path 切 3 片（左半 + 右上/右下翼）。 */
+  function buildFoldSlices() {
+    if (!el.ppStage) return null;
+    var src = el.noteCover ? el.noteCover.querySelector('canvas') : null;
+    if (!src || !src.width || !src.height) return null;
+    var r = src.getBoundingClientRect();
+    var wr = el.noteCoverWrap.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    el.ppStage.style.left = (r.left - wr.left) + 'px';
+    el.ppStage.style.top = (r.top - wr.top) + 'px';
+    el.ppStage.style.width = r.width + 'px';
+    el.ppStage.style.height = r.height + 'px';
+    el.ppStage.style.setProperty('--cw', r.width.toFixed(1));
+    el.ppStage.style.setProperty('--ch', r.height.toFixed(1));
+    el.ppStage.innerHTML = '';
+    // 切片形状直接烘进 canvas（clip-path 会压 flat / 破坏 backface 剔除）
+    var regions = {
+      'fp-l': [[0, 0], [0.5, 0], [0.5, 1], [0, 1]],
+      'fp-wt': [[0.5, 0], [1, 0], [1, 0.5]],
+      'fp-wb': [[0.5, 1], [1, 1], [1, 0.5]]
+    };
+    var W = src.width;
+    var H = src.height;
+    function sliceCanvas(cls, isBack) {
+      var cv = document.createElement('canvas');
+      cv.width = W;
+      cv.height = H;
+      var ctx = cv.getContext('2d');
+      var pts = regions[cls];
+      ctx.beginPath();
+      for (var i = 0; i < pts.length; i++) {
+        var x = pts[i][0] * W;
+        var y = pts[i][1] * H;
+        if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      }
+      ctx.closePath();
+      if (isBack) { // 纸背：白纸打底叠印封面，折过去仍认得出「这张封面」
+        var g = ctx.createLinearGradient(0, 0, W, H);
+        g.addColorStop(0, '#fbfbfb');
+        g.addColorStop(1, '#e3e3e3');
+        ctx.fillStyle = g;
+        ctx.fill();
+        ctx.save();
+        ctx.clip(); // 只在切片区域内叠印
+        ctx.globalAlpha = 0.8;
+        ctx.drawImage(src, 0, 0);
+        ctx.globalAlpha = 0.1; // 薄薄一层白，保住「纸感」和明暗
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+      } else { // 正面：封面内容 + 裁出切片区域
+        ctx.drawImage(src, 0, 0);
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.fill();
+      }
+      return cv;
+    }
+    ['fp-l', 'fp-wt', 'fp-wb'].forEach(function (cls) {
+      var p = document.createElement('div');
+      p.className = 'fp ' + cls;
+      var face = document.createElement('div');
+      face.className = 'pp-face';
+      face.appendChild(sliceCanvas(cls, false));
+      p.appendChild(face);
+      var back = document.createElement('div');
+      back.className = 'pp-back';
+      back.appendChild(sliceCanvas(cls, true));
+      p.appendChild(back);
+      el.ppStage.appendChild(p);
+    });
+    return r;
+  }
+
+  function startFold() {
+    if (planeState !== 'confirming') return;
+    var rect = buildFoldSlices();
+    if (!rect) { // 无可用封面（理论上不会发生）：退回原保存逻辑
+      planeState = 'idle';
+      if (el.noteCoverWrap) el.noteCoverWrap.classList.remove('is-confirming');
+      if (el.btnNoteSave) el.btnNoteSave.textContent = '保存并下一张';
+      saveCurrentNote(false);
+      return;
+    }
+    planeState = 'animating';
+    if (el.noteCoverWrap) {
+      el.noteCoverWrap.classList.remove('is-confirming');
+      el.noteCoverWrap.classList.add('is-folding');
+    }
+    if (el.noteCover) el.noteCover.style.visibility = 'hidden'; // 原封面隐身留占位
+    if (el.btnNoteSave) el.btnNoteSave.textContent = '保存并下一张';
+    holdTabsVisible(); // 飞行目标 tab 持续可见（不受 1.5s 定时器影响）
+    el.ppStage.classList.add('is-fold1'); // 第一折：沿中线对折
+    setTimeout(function () {
+      el.ppStage.classList.add('is-fold2'); // 第二折：双翼沿对角折
+    }, 500);
+    setTimeout(settleAndFly, 1000);
+  }
+
+  function stageCenter() {
+    var r = el.ppStage.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+
+  function settleAndFly() {
+    var from = stageCenter();
+    el.ppStage.classList.add('is-settled'); // 折成飞机姿态
+    setTimeout(function () {
+      if (el.noteCoverWrap) el.noteCoverWrap.classList.add('is-flying');
+      if (el.ppPlane) {
+        el.ppPlane.style.opacity = '1';
+        el.ppPlane.style.transform =
+          'translate(' + (from.x - PLANE_W / 2) + 'px,' + (from.y - PLANE_H / 2) + 'px)';
+      }
+      flyToLibrary(from);
+    }, 160);
+  }
+
+  /** 二次贝塞尔弧线飞向底部导航「灵感库」tab。 */
+  function flyToLibrary(from) {
+    holdTabsVisible(); // 测量前强制显示，且此刻动画位移已完成，rect 即真实位置
+    var tab = document.querySelector('.tab[data-view="library"]');
+    var to = { x: window.innerWidth / 2, y: window.innerHeight - 30 };
+    if (tab) {
+      var tr = tab.getBoundingClientRect();
+      if (tr.width && tr.height && tr.top > 0) { // rect 有效才用，防御 tab 未就绪
+        to = { x: tr.left + tr.width / 2, y: tr.top + tr.height / 2 };
+      }
+    }
+    var cx = (from.x + to.x) / 2 + 40;
+    var cy = from.y + (to.y - from.y) * 0.3 - 40; // 轻微上拱，整体向下/斜下飞向底部 tab
+
+    function bez(p0, p1, p2, t) {
+      var u = 1 - t;
+      return u * u * p0 + 2 * u * t * p1 + t * t * p2;
+    }
+
+    var start = null;
+    function step(now) {
+      if (!el.ppPlane) return;
+      if (!start) start = now;
+      var t = Math.min((now - start) / FLY_MS, 1);
+      var e = t * t * (3 - 2 * t); // smoothstep
+      var x = bez(from.x, cx, to.x, e);
+      var y = bez(from.y, cy, to.y, e);
+      var dx = 2 * (1 - e) * (cx - from.x) + 2 * e * (to.x - cx);
+      var dy = 2 * (1 - e) * (cy - from.y) + 2 * e * (to.y - cy);
+      var ang = Math.atan2(dy, dx) * 180 / Math.PI;
+      var scale = 1 - 0.5 * e; // 全程保持轮廓清楚，落地前仍约半尺寸
+      el.ppPlane.style.transform =
+        'translate(' + (x - PLANE_W / 2) + 'px,' + (y - PLANE_H / 2) + 'px) rotate(' +
+        ang.toFixed(2) + 'deg) scale(' + scale.toFixed(3) + ')';
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else {
+        el.ppPlane.style.opacity = '0';
+        landOnLibrary();
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function landOnLibrary() {
+    revealTabs(); // 落地时保证 tab 可见并轻弹
+    var tab = document.querySelector('.tab[data-view="library"]');
+    if (tab) {
+      tab.classList.add('pp-hit');
+      setTimeout(function () { tab.classList.remove('pp-hit'); }, 650);
+    }
+    if (el.ppToast) el.ppToast.classList.add('show');
+    setTimeout(function () {
+      if (el.ppToast) el.ppToast.classList.remove('show');
+    }, 2600);
+
+    // 落地反馈后走原有保存逻辑（真正写库并下一张 / 切灵感库）
+    setTimeout(function () {
+      saveCurrentNote(false).then(function () {
+        cleanupFold();
+      }).catch(function () {
+        cleanupFold();
+      });
+    }, 380);
+  }
+
+  function cleanupFold() {
+    planeState = 'idle';
+    if (el.noteCoverWrap) el.noteCoverWrap.classList.remove('is-folding', 'is-flying');
+    if (el.ppStage) {
+      el.ppStage.classList.remove('is-fold1', 'is-fold2', 'is-settled');
+      el.ppStage.innerHTML = '';
+      el.ppStage.style.left = '';
+      el.ppStage.style.top = '';
+      el.ppStage.style.width = '';
+      el.ppStage.style.height = '';
+    }
+    if (el.noteCover) el.noteCover.style.visibility = '';
+    if (el.ppPlane) el.ppPlane.style.opacity = '0';
+    if (el.btnNoteSave) el.btnNoteSave.textContent = '保存并下一张';
+  }
+
+  /* ---------- 录屏钩子 __demo ---------- */
+  var DEMO_THEMES = [
+    {
+      stops: [['0', '#ffd9c2'], ['0.45', '#f7a8b8'], ['1', '#b8c6f7']],
+      lines: ['裸辞3个月', '我后悔了吗'],
+      type: 'result',
+      headline: '裸辞3个月，我后悔了吗',
+      why: '数字太夸张了、感觉在说我',
+      a: '0粉→10万粉，用了90天',
+      b: '后台数据截图',
+      extra: '高饱和渐变 + 大字标题'
+    },
+    {
+      stops: [['0', '#c2f7d9'], ['0.45', '#8fe3b0'], ['1', '#3f8ef7']],
+      lines: ['成年人的崩溃', '是静音的'],
+      type: 'emotion',
+      headline: '成年人的崩溃，是静音的',
+      why: '第一句就破防了',
+      a: '破防——深夜加班回家的地铁上',
+      b: '第一人称独白 + 深夜氛围',
+      extra: '低饱和冷色 + 大留白'
+    },
+    {
+      stops: [['0', '#f7f3c2'], ['0.45', '#f7c94b'], ['1', '#f78c5a']],
+      lines: ['以为多喝水养胃', '其实喝太多伤肾'],
+      type: 'contrast',
+      headline: '以为多喝水养胃，其实伤肾',
+      why: '反常识，想点进去看依据',
+      a: '以为多喝水养胃 / 其实喝太多伤肾',
+      b: '三甲医院医生亲述',
+      extra: '高对比撞色 + 划线纠错排版'
+    }
+  ];
+
+  function makeDemoCoverBlob(theme) {
+    var canvas = document.createElement('canvas');
+    canvas.width = 300;
+    canvas.height = 400;
+    var ctx = canvas.getContext('2d');
+    var g = ctx.createLinearGradient(0, 0, 300, 400);
+    theme.stops.forEach(function (s) { g.addColorStop(Number(s[0]), s[1]); });
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 300, 400);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = '700 34px sans-serif';
+    ctx.fillText(theme.lines[0], 40, 170);
+    ctx.fillText(theme.lines[1], 40, 220);
+    return canvasToBlob(canvas, 'image/jpeg', 0.92);
+  }
+
+  /** 为当前 noteIndex 的封面预填类型与字段（fillNoteForm 之后调用）。 */
+  function prefillDemoNote() {
+    var theme = DEMO_THEMES[state.noteIndex] || DEMO_THEMES[0];
+    chooseCoverType(theme.type);
+    if (el.fieldHeadline) el.fieldHeadline.value = theme.headline;
+    if (el.fieldWhy) el.fieldWhy.value = theme.why;
+    if (el.fieldA) el.fieldA.value = theme.a;
+    if (el.fieldB) el.fieldB.value = theme.b;
+    if (el.fieldExtra) el.fieldExtra.value = theme.extra;
+  }
+
+  function prepareDemo() {
+    return Promise.all(DEMO_THEMES.map(makeDemoCoverBlob)).then(function (blobs) {
+      cleanupFold();
+      if (el.ppToast) el.ppToast.classList.remove('show');
+      var tab = document.querySelector('.tab[data-view="library"]');
+      if (tab) tab.classList.remove('pp-hit');
+      var clearPrev = Promise.resolve();
+      if (demoTrackIds.length) { // 清掉上一次演示写入的记录，保证可反复播放
+        clearPrev = openDb().then(function (db) {
+          var chain = Promise.resolve();
+          demoTrackIds.forEach(function (id) {
+            chain = chain.then(function () { return idbDelete(db, id); });
+          });
+          return chain.then(function () {
+            db.close();
+            demoTrackIds = [];
+            return refreshLibrary();
+          });
+        }).catch(function () { demoTrackIds = []; });
+      }
+      return clearPrev.then(function () {
+        var items = blobs.map(function (blob, i) {
+          return blob ? { id: uid(), blob: blob, width: 300, height: 400 } : null;
+        }).filter(Boolean);
+        if (!items.length) return;
+        state.candidates = items;
+        state.selectedIds = {};
+        items.forEach(function (it) { state.selectedIds[it.id] = true; });
+        state.noteQueue = items;
+        state.noteIndex = 0;
+        showView('note');
+        fillNoteForm();
+        prefillDemoNote();
+      });
+    });
+  }
+
+  /** 非最后一张：等同点一次「保存并下一张」（直接保存并预填下一张）；
+   *  已是最后一张：no-op，返回 false。 */
+  function demoSaveNext() {
+    if (isLastNote()) return Promise.resolve(false);
+    return saveCurrentNote(false).then(function () {
+      if (state.noteQueue[state.noteIndex]) prefillDemoNote();
+      return true;
+    });
+  }
+
+  /** 仅在最后一张进入折痕确认态；否则串行 saveNext 直到最后一张。 */
+  function demoStart() {
+    function step() {
+      if (isLastNote()) { enterConfirm(); return true; }
+      return demoSaveNext().then(step);
+    }
+    return Promise.resolve(step());
+  }
+
   function bind() {
     el.importHit = $('import-hit');
     el.importStage = $('import-stage');
@@ -1425,6 +1785,12 @@
     el.fieldBLabel = $('field-b-label');
     el.fieldExtra = $('field-extra');
     el.noteProgress = $('note-progress');
+    el.noteCoverWrap = $('note-cover-wrap');
+    el.ppCreases = $('pp-creases');
+    el.ppStage = $('pp-stage');
+    el.ppPlane = $('pp-plane');
+    el.ppToast = $('pp-toast');
+    el.btnNoteSave = $('btn-note-save');
     el.btnNoteSkip = $('btn-note-skip');
     el.btnNoteSkipType = $('btn-note-skip-type');
     el.libraryRows = $('library-rows');
@@ -1480,21 +1846,26 @@
 
     el.noteForm.addEventListener('submit', function (ev) {
       ev.preventDefault();
-      saveCurrentNote(false);
+      onNoteSubmit();
     });
 
     el.btnNoteSkip.addEventListener('click', function () {
+      if (planeState === 'confirming') { cancelConfirm(); return; }
+      if (planeState === 'animating') return;
       saveCurrentNote(true);
     });
 
     if (el.btnNoteSkipType) {
       el.btnNoteSkipType.addEventListener('click', function () {
+        if (planeState === 'confirming') { cancelConfirm(); return; }
+        if (planeState === 'animating') return;
         saveCurrentNote(true);
       });
     }
 
     if (el.btnTypeBack) {
       el.btnTypeBack.addEventListener('click', function () {
+        cancelConfirm();
         clearCoverType();
       });
     }
@@ -1591,6 +1962,15 @@
   var askHandler = null;
   var gestureY = 0;
 
+  /** 折叠/飞行期间强制底部导航持续可见：清掉 1.5s 自动隐藏定时器并同步显示。 */
+  function holdTabsVisible() {
+    if (!el.tabs) return;
+    if (tabTimer) clearTimeout(tabTimer);
+    tabTimer = 0;
+    el.tabs.hidden = false;
+    el.tabs.classList.add('is-shown'); // 同步加类，保证随后 getBoundingClientRect 已是真实位置
+  }
+
   function revealTabs() {
     if (!el.tabs) return;
     if (tabTimer) clearTimeout(tabTimer);
@@ -1680,5 +2060,39 @@
     document.addEventListener('DOMContentLoaded', init);
   } else {
     init();
+  }
+
+  // 录屏钩子：默认页面仍从导入页开始，不自动播放。
+  window.__demo = {
+    prepare: function () { return prepareDemo(); },
+    saveNext: function () { return demoSaveNext(); },
+    start: function () { return demoStart(); },
+    confirm: startFold,
+    reset: function () { return prepareDemo(); }
+  };
+
+  // 仅供无交互录屏 / 回归：?__demo=play 才自动预填并播放完整多封面流程；
+  // 默认打开不受影响（仍是导入页）。
+  if (/[?&]__demo=play/.test(window.location.search)) {
+    var bootDemo = function () {
+      window.__demo.prepare().then(function () {
+        return window.__demo.saveNext(); // 第 1 → 2 张：直接保存切下一张
+      }).then(function () {
+        return window.__demo.saveNext(); // 第 2 → 3 张（最后一张）
+      }).then(function () {
+        // 最后一张：先进入折痕确认态，稍等再起飞
+        return new Promise(function (resolve) {
+          window.__demo.start(); // 已在最后一张，直接 enterConfirm
+          setTimeout(resolve, 500);
+        });
+      }).then(function () {
+        window.__demo.confirm(); // startFold：折飞机 → 飞灵感库
+      });
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bootDemo);
+    } else {
+      bootDemo();
+    }
   }
 })();

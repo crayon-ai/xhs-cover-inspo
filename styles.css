@@ -215,7 +215,7 @@ html.is-library body {
 .tabs {
   position: fixed;
   z-index: 80;
-  top: calc(8px + env(safe-area-inset-top, 0px));
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   width: max-content;
   max-width: calc(100% - 28px);
@@ -231,8 +231,8 @@ html.is-library body {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
-  -webkit-transform: translate(-50%, -160%);
-  transform: translate(-50%, -160%);
+  -webkit-transform: translate(-50%, 220%);
+  transform: translate(-50%, 220%);
   transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out), visibility 200ms var(--ease-out);
 }
 
@@ -2021,4 +2021,205 @@ html.is-library body {
 @media (min-width: 720px) {
   #app { padding-top: 24px; }
   .logo { font-size: 18px; }
+}
+
+/* ================= 折痕预演 · 纸飞机（记笔记确认动效） ================= */
+
+/* 封面包裹：收缩到封面尺寸，折痕 / 折叠面板都定位在封面正上方 */
+.note-cover-wrap {
+  position: relative;
+  width: max-content;
+  margin: 8px auto 18px;
+}
+
+.note-cover-wrap .note-cover { margin: 0; }
+
+/* 确认态：虚线折痕浮现（中线 + 两条对角，纸飞机折法） */
+.pp-creases {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  z-index: 3;
+}
+
+.pp-crease {
+  stroke: #9a9a9a;
+  stroke-width: 1.4;
+  stroke-dasharray: 5 4;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.note-cover-wrap.is-confirming .pp-creases { opacity: 0.9; }
+
+/* 折叠舞台：3D 折叠，切片面板接管封面 */
+.pp-stage {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0;
+  transform-style: preserve-3d;
+  perspective: 800px;
+}
+
+.note-cover-wrap.is-folding .pp-stage { opacity: 1; }
+
+.fp {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.fp > .pp-face,
+.fp > .pp-back {
+  position: absolute;
+  inset: 0;
+  /* 切片形状已烘进 canvas，这里不再用 clip-path：
+     clip/filter 等分组属性会让 Chromium 跳过 backface 剔除，露出镜像正面 */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.fp > .pp-face canvas,
+.fp > .pp-back canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fp > .pp-back { transform: rotateY(180deg); }
+
+/* 折叠时切片带明暗渐变，突出立体折痕（只在切片三角形内，避免整块白玻璃感） */
+.fp::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, rgba(0, 0, 0, 0.16), rgba(255, 255, 255, 0.1) 55%, rgba(0, 0, 0, 0.22));
+  opacity: 0;
+}
+
+.fp-l::after { clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%); }
+.fp-wt::after { clip-path: polygon(50% 0, 100% 0, 100% 50%); }
+.fp-wb::after { clip-path: polygon(50% 100%, 100% 100%, 100% 50%); }
+
+/* 左半：沿竖中线向后折（origin 在折痕上，别用 100%，否则折页飞出舞台） */
+.fp-l { transform-origin: 50% 50%; }
+
+/* 右上三角：沿对角线折下（机翼） */
+.fp-wt { transform-origin: 50% 0; }
+
+/* 右下三角：沿对角线折上（机翼） */
+.fp-wb { transform-origin: 50% 100%; }
+
+/* 第一折：对折（0.34s） */
+.pp-stage.is-fold1 .fp-l { animation: ppFoldL 0.34s cubic-bezier(0.5, 0, 0.9, 0.4) forwards; }
+.pp-stage.is-fold1 .fp-l::after { animation: ppShadeL 0.34s ease forwards; }
+
+@keyframes ppFoldL { to { transform: rotateY(160deg); } }
+@keyframes ppShadeL { to { opacity: 1; } }
+
+/* 第二折：双翼沿对角折（0.36s） */
+.pp-stage.is-fold2 .fp-wt { animation: ppFoldWT 0.36s cubic-bezier(0.45, 0, 0.6, 1) forwards; }
+.pp-stage.is-fold2 .fp-wb { animation: ppFoldWB 0.36s cubic-bezier(0.45, 0, 0.6, 1) forwards; }
+.pp-stage.is-fold2 .fp-wt::after,
+.pp-stage.is-fold2 .fp-wb::after { animation: ppShadeW 0.36s ease forwards; }
+
+/* --cw/--ch 由 JS 设为封面实际宽高，对角折轴 = (w, h) 方向 */
+@keyframes ppFoldWT {
+  60% { transform: rotate3d(var(--cw, 140), var(--ch, 180), 0, -150deg); }
+  100% { transform: rotate3d(var(--cw, 140), var(--ch, 180), 0, -138deg); }
+}
+
+@keyframes ppFoldWB {
+  60% { transform: rotate3d(var(--cw, 140), calc(var(--ch, 180) * -1), 0, 150deg); }
+  100% { transform: rotate3d(var(--cw, 140), calc(var(--ch, 180) * -1), 0, 138deg); }
+}
+
+@keyframes ppShadeW { to { opacity: 0.62; } }
+
+/* 折成后整机微调，呈飞机姿态 */
+.pp-stage.is-settled { animation: ppSettle 0.16s ease-out forwards; }
+
+@keyframes ppSettle {
+  to { transform: rotateZ(-7deg) scale(0.8, 0.72) translateY(6px); }
+}
+
+.note-cover-wrap.is-flying .pp-stage {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* 纸飞机 */
+.pp-plane {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 150px;
+  height: 94px;
+  z-index: 90;
+  pointer-events: none;
+  opacity: 0;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.18));
+}
+
+/* 落地：灵感库 tab 轻弹 + 高亮 */
+.tab.pp-hit { animation: ppTabBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+@keyframes ppTabBounce {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.18); }
+  70% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+
+.tab.pp-hit::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.22);
+  animation: ppTabGlow 0.65s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes ppTabGlow {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* toast：已收入灵感库 */
+.pp-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 92px;
+  transform: translate(-50%, 12px);
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(26, 26, 26, 0.92);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 95;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease, transform 0.32s var(--ease-out);
+}
+
+.pp-toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fp-l, .fp-wt, .fp-wb, .pp-stage.is-settled, .tab.pp-hit { animation-duration: 0.01s !important; }
+  .pp-creases, .pp-stage, .pp-toast { transition-duration: 0.01s !important; }
 }
