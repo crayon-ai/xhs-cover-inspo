@@ -1124,50 +1124,81 @@ html.is-library body {
   display: block;
   width: auto;
   height: auto;
-  max-width: min(260px, 70vw);
-  border-radius: 18px;
+  max-width: min(148px, 38vw);
+  max-height: 176px;
+  border-radius: 16px;
   background: #f3f3f3;
   box-shadow:
-    0 16px 36px rgba(20, 20, 20, 0.10),
+    0 12px 28px rgba(20, 20, 20, 0.08),
     0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 
-.note-form label,
-.note-cat__k {
+.note-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 12px;
+}
+
+.note-field {
+  position: relative;
   display: block;
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: rgba(26, 26, 26, 0.78);
+  margin: 4px 0 0;
+  padding: 16px 14px 12px;
+  border: 1px solid rgba(26, 26, 26, 0.16);
+  border-radius: 16px;
+  background: #ffffff;
+  transition: border-color var(--dur) var(--ease-out);
+}
+
+.note-field:focus-within {
+  border-color: rgba(26, 26, 26, 0.55);
+}
+
+.note-field > span,
+.note-cat__k {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  transform: translateY(-50%);
+  padding: 0 6px;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: rgba(26, 26, 26, 0.45);
 }
 
 .note-form textarea,
 .note-form input[type="text"] {
   display: block;
   width: 100%;
-  margin-top: 6px;
-  border: 1px solid rgba(0, 0, 0, 0.10);
-  border-radius: 14px;
-  padding: 11px 12px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 2px 0;
+  min-height: 44px;
   font: inherit;
-  font-size: 15px;
-  background: #f7f7f5;
+  font-size: 16px;
+  line-height: 1.4;
+  background: transparent;
   color: #1a1a1a;
   caret-color: #1a1a1a;
-  resize: vertical;
-  transition: border-color var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
+  resize: none;
+  box-shadow: none;
 }
 
 .note-form textarea::placeholder,
 .note-form input[type="text"]::placeholder {
-  color: rgba(26, 26, 26, 0.32);
+  color: rgba(26, 26, 26, 0.28);
 }
 
 .note-form textarea:focus,
 .note-form input[type="text"]:focus {
   outline: none;
-  border-color: rgba(0, 0, 0, 0.45);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+  border: 0;
+  box-shadow: none;
 }
 
 .note-progress {
@@ -1190,42 +1221,85 @@ html.is-library body {
   border-color: rgba(0, 0, 0, 0.10);
 }
 
-.note-cat { margin-bottom: 12px; }
-
-.note-cat__k { margin-bottom: 8px; }
+.note-cat { min-height: 56px; }
 
 .note-cat-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 8px;
+  margin: 2px 0 0;
 }
 
 .note-cat-chips:empty { display: none; }
 
-.note-cat-add {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
+.note-cat .cat-chip {
+  border: 1px solid rgba(26, 26, 26, 0.14);
+  background: #ffffff;
+  color: rgba(26, 26, 26, 0.72);
 }
 
-.note-cat-add input[type="text"] { margin-top: 0; }
+.note-cat .cat-chip.is-active {
+  background: #1a1a1a;
+  color: #ffffff;
+  border-color: #1a1a1a;
+}
 
-.note-cat-add button {
+.note-field--add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 8px;
+}
+
+.note-field--add input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.note-field--add button {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: #1a1a1a;
   font: inherit;
   font-size: 14px;
   font-weight: 600;
-  border-radius: var(--radius-pill);
-  padding: 0 16px;
-  min-height: 44px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: #ffffff;
-  color: #1a1a1a;
+  min-height: 36px;
+  padding: 0 8px;
   cursor: pointer;
 }
 
-.note-cat-add button:active { transform: scale(0.98); }
+.note-field--add button:active { opacity: 0.6; }
+
+.note-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.note-skip {
+  border: 0;
+  background: transparent;
+  color: #1a1a1a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.note-actions .btn {
+  width: 100%;
+  margin-top: 0;
+  min-height: 52px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
 
 .chips {
   display: flex;
@@ -1813,7 +1887,7 @@ html.is-library body {
   .import-hit:active .import-ring,
   .lib-card:active,
   .cat-chip:active,
-  .note-cat-add button:active,
+  .note-field--add button:active,
   .sheet-cat-add button:active,
   .sheet-save:active,
   .sheet-confirm__cancel:active,
