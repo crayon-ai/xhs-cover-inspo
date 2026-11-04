@@ -1169,23 +1169,45 @@
     });
   }
 
+  /** Keep a textarea as tall as its content (min stays at rows). */
+  function autoGrowTextarea(area) {
+    area.style.height = 'auto';
+    area.style.height = area.scrollHeight + 'px';
+  }
+
+  /** Detail-sheet field, styled like the note page's notch-label box. */
   function sheetAddEditor(parent, label, key) {
-    var row = document.createElement('div');
-    row.className = 'sheet-row';
-    var k = document.createElement('p');
-    k.className = 'sheet-k';
+    var box = document.createElement('label');
+    box.className = 'sheet-field';
+    var k = document.createElement('span');
     k.textContent = label;
     var area = document.createElement('textarea');
     area.className = 'sheet-input';
     area.rows = 2;
     area.value = state.sheetDraft[key] || '';
+    autoGrowTextarea(area);
     area.addEventListener('input', function () {
       state.sheetDraft[key] = area.value;
+      autoGrowTextarea(area);
       syncSheetSaveBtn();
     });
-    row.appendChild(k);
-    row.appendChild(area);
-    parent.appendChild(row);
+    box.appendChild(k);
+    box.appendChild(area);
+    parent.appendChild(box);
+  }
+
+  /** Read-only type display: only the record's own chosen type. */
+  function sheetAddType(parent, name) {
+    var box = document.createElement('div');
+    box.className = 'sheet-field sheet-field--static';
+    var k = document.createElement('span');
+    k.textContent = '封面类型';
+    var v = document.createElement('p');
+    v.className = 'sheet-v';
+    v.textContent = name;
+    box.appendChild(k);
+    box.appendChild(v);
+    parent.appendChild(box);
   }
 
   function sheetCategoryNames() {
@@ -1194,61 +1216,22 @@
     });
   }
 
-  function setSheetCoverType(id) {
-    var type = coverTypeById(id);
-    if (!type || !state.sheetDraft) return;
-    var next = {
-      coverType: type.id,
-      headline: state.sheetDraft.headline || '',
-      whyClick: state.sheetDraft.whyClick || '',
-      extra: state.sheetDraft.extra || ''
-    };
-    next[type.a.key] = state.sheetDraft[type.a.key] || '';
-    next[type.b.key] = state.sheetDraft[type.b.key] || '';
-    state.sheetDraft = next;
-    fillSheetFields(libraryItemById(state.sheetId));
-    syncSheetSaveBtn();
-  }
-
-  function paintSheetTypes() {
-    if (!el.sheetTypeList || !state.sheetDraft) return;
-    var current = state.sheetDraft.coverType || '';
-    el.sheetTypeList.innerHTML = '';
-    COVER_TYPES.forEach(function (type) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'cat-chip' + (current === type.id ? ' is-active' : '');
-      b.textContent = type.name;
-      b.addEventListener('click', function () {
-        setSheetCoverType(type.id);
-      });
-      el.sheetTypeList.appendChild(b);
-    });
-  }
-
+  /** Detail sheet mirrors the note page: 封面主文案 → 为什么想点 →
+   *  the record's own type's two fields → 补充想法. Legacy records
+   *  without a coverType only show the common fields (their old
+   *  feeling/structure/learnable text lives in extra). */
   function fillSheetFields(item) {
     if (!el.sheetFields || !item || !state.sheetDraft) return;
     el.sheetFields.innerHTML = '';
-    var row = document.createElement('div');
-    row.className = 'sheet-row sheet-row--cat';
-    var k = document.createElement('p');
-    k.className = 'sheet-k';
-    k.textContent = '封面类型';
-    var chips = document.createElement('div');
-    chips.className = 'sheet-cat-chips';
-    el.sheetTypeList = chips;
-    row.appendChild(k);
-    row.appendChild(chips);
-    el.sheetFields.appendChild(row);
-    paintSheetTypes();
     var type = coverTypeById(state.sheetDraft.coverType);
+    if (type) sheetAddType(el.sheetFields, type.name);
+    sheetAddEditor(el.sheetFields, '封面主文案', 'headline');
+    sheetAddEditor(el.sheetFields, '为什么想点', 'whyClick');
     if (type) {
-      sheetAddEditor(el.sheetFields, '封面主文案', 'headline');
-      sheetAddEditor(el.sheetFields, '为什么想点', 'whyClick');
       sheetAddEditor(el.sheetFields, type.a.label, type.a.key);
       sheetAddEditor(el.sheetFields, type.b.label, type.b.key);
-      sheetAddEditor(el.sheetFields, '补充想法', 'extra');
     }
+    sheetAddEditor(el.sheetFields, '补充想法', 'extra');
     sheetAddField(el.sheetFields, '保存', formatSavedAt(item.createdAt));
     syncSheetSaveBtn();
   }
@@ -1319,6 +1302,12 @@
     hideSheetConfirm();
     fillSheetFields(item);
     el.libSheet.hidden = false;
+    // scrollHeight is only valid once the sheet is visible in the DOM.
+    requestAnimationFrame(function () {
+      if (!el.sheetFields) return;
+      var areas = el.sheetFields.querySelectorAll('textarea');
+      for (var i = 0; i < areas.length; i++) autoGrowTextarea(areas[i]);
+    });
   }
 
   var sheetDrag = null;

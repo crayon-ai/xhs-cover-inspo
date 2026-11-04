@@ -1694,7 +1694,76 @@ html.is-library body {
   object-fit: contain;
 }
 
-.lib-sheet__fields { margin: 14px 0 4px; }
+.lib-sheet__fields {
+  margin: 14px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Detail-sheet fields share the note page's notch-label box:
+   white bg, rounded light-gray outline, label sitting in the
+   top border gap. */
+.sheet-field {
+  position: relative;
+  display: block;
+  margin: 0;
+  padding: 16px 14px 12px;
+  border: 1px solid rgba(26, 26, 26, 0.16);
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.sheet-field > span {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  transform: translateY(-50%);
+  padding: 0 6px;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: rgba(26, 26, 26, 0.45);
+}
+
+.sheet-field textarea {
+  display: block;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 2px 0;
+  min-height: 44px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  background: transparent;
+  color: #1a1a1a;
+  caret-color: #1a1a1a;
+  resize: none;
+  box-shadow: none;
+}
+
+.sheet-field textarea::placeholder { color: rgba(26, 26, 26, 0.28); }
+
+.sheet-field textarea:focus {
+  outline: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.sheet-field:focus-within { border-color: rgba(26, 26, 26, 0.55); }
+
+.sheet-field--static { padding: 12px 14px; }
+
+.sheet-field--static .sheet-v {
+  font-size: 16px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
 
 .sheet-row { margin: 0 0 12px; }
 
