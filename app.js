@@ -663,8 +663,8 @@
     var nw = canvas.width;
     var nh = canvas.height;
     if (!nw || !nh) return;
-    var maxW = Math.min(148, Math.max(112, window.innerWidth * 0.36));
-    var maxH = Math.min(176, Math.round(window.innerHeight * 0.22));
+    var maxW = Math.min(200, Math.max(140, window.innerWidth * 0.5));
+    var maxH = Math.min(260, Math.round(window.innerHeight * 0.3));
     var scale = Math.min(maxW / nw, maxH / nh);
     canvas.style.width = Math.max(1, Math.round(nw * scale)) + 'px';
     canvas.style.height = Math.max(1, Math.round(nh * scale)) + 'px';

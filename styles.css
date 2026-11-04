@@ -247,7 +247,7 @@ html.is-note body {
 }
 
 #app.is-note main {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
   display: flex;
@@ -256,7 +256,7 @@ html.is-note body {
 
 #app.is-note #view-note.is-visible {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
   flex-direction: column;
@@ -265,22 +265,30 @@ html.is-note body {
 .note-stage {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
+  overflow: hidden;
+  touch-action: none;
 }
 
 .note-stage .note-progress,
 .note-stage .note-cover-wrap {
   flex: none;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #ffffff;
 }
 
 /* Scrollable field area: type list + form + skip button */
 .note-scroll {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  height: 0;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -1197,8 +1205,8 @@ html.is-note body {
   display: block;
   width: auto;
   height: auto;
-  max-width: min(148px, 38vw);
-  max-height: 176px;
+  max-width: min(200px, 52vw);
+  max-height: min(260px, 32vh);
   border-radius: 16px;
   background: #f3f3f3;
   box-shadow:
