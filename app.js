@@ -1372,8 +1372,19 @@
   var RING_TRIGGER_MAX = 170; // 松手时与选中按钮的最大距离，超过则视为取消
 
   var viewerPress = null;  // {x,y,t,moved,long,timer,id}
-  var ringState = null;    // {px,py,hot,buttons,targets}
+  var ringState = null;    // {px,py,hot,buttons,targets,tapPick}
   var toastTimer = 0;
+  var ringClickShieldUntil = 0; // resolve 后短暂吞掉合成 click，防幽灵点击误关查看器
+
+  function shieldGhostClick() {
+    ringClickShieldUntil = Date.now() + 420;
+  }
+
+  // 环打开期间：关闭叉不可命中/不可聚焦，避免焦点或命中落到叉上
+  function setRingOpen(on) {
+    if (el.imgViewer) el.imgViewer.classList.toggle('is-ring-open', !!on);
+    if (el.viewerClose) el.viewerClose.tabIndex = on ? -1 : 0;
+  }
 
   function viewerItem() {
     return libraryItemById(state.viewerId);
@@ -1579,6 +1590,7 @@
       targets: null
     };
     el.actionRing.hidden = false;
+    setRingOpen(true);
     ringState.buttons.forEach(function (b, i) {
       b.el.style.transitionDelay = (i * 40) + 'ms';
       b.el.style.opacity = '0';
@@ -1623,6 +1635,8 @@
 
   function dismissRing() {
     if (!el.actionRing) return;
+    el.actionRing.classList.remove('is-tap-pick');
+    setRingOpen(false);
     if (!ringState) {
       el.actionRing.hidden = true;
       return;
@@ -1646,17 +1660,53 @@
     }, 190);
   }
 
-  function resolveRing() {
+  function resolveRing(ev) {
     var st = ringState;
     if (!st) return;
+    if (st.tapPick) {
+      // 点选模式下在按钮之外松手：视为放弃，收环
+      dismissRing();
+      shieldGhostClick();
+      return;
+    }
     var hot = st.hot;
     var hotDist = st.hotDist;
+    // 触摸上松手时未选中任何按钮：保持环可见，切换为点选模式
+    if (!hot || hotDist > RING_TRIGGER_MAX) {
+      if (ev && ev.pointerType === 'touch') {
+        st.tapPick = true;
+        st.hot = null;
+        st.hotDist = Infinity;
+        el.actionRing.classList.add('is-tap-pick');
+        // 仅 CSS 禁用关闭叉即可，不能 shield：否则随后 420ms 内的点选 click 会被捕获拦截
+        return;
+      }
+      dismissRing();
+      // 手指离选中按钮过远时视为取消，避免误触
+      return;
+    }
     dismissRing();
-    // 手指离选中按钮过远时视为取消，避免误触
-    if (!hot || hotDist > RING_TRIGGER_MAX) return;
+    shieldGhostClick();
     if (hot === 'like') ringLike();
     else if (hot === 'export') ringExport();
     else if (hot === 'desc') ringDesc();
+  }
+
+  // 点选模式：点某个环按钮直接执行该动作
+  function onRingButtonClick(ev) {
+    var btn = ev.target && ev.target.closest ? ev.target.closest('.ring-btn') : null;
+    if (!btn || !ringState || !ringState.tapPick) return;
+    ev.stopPropagation();
+    ev.preventDefault();
+    var key = null;
+    for (var i = 0; i < ringState.buttons.length; i++) {
+      if (ringState.buttons[i].el === btn) { key = ringState.buttons[i].key; break; }
+    }
+    dismissRing();
+    shieldGhostClick();
+    if (key === 'like') ringLike();
+    else if (key === 'export') ringExport();
+    else if (key === 'desc') ringDesc();
   }
 
   // —— 三个动作 ——
@@ -1731,6 +1781,14 @@
   function onViewerPointerDown(ev) {
     if (!state.viewerId || !el.imgViewer || el.imgViewer.hidden) return;
     if (ev.target === el.viewerClose) return;
+    if (ringState && ringState.tapPick) {
+      // 点选模式：点在环按钮上交给 click 处理；点空白处则收环
+      var btn = ev.target && ev.target.closest ? ev.target.closest('.ring-btn') : null;
+      if (btn) return;
+      dismissRing();
+      shieldGhostClick();
+      return;
+    }
     viewerPress = {
       x: ev.clientX,
       y: ev.clientY,
@@ -1768,7 +1826,7 @@
     viewerPress = null;
     if (p.timer) clearTimeout(p.timer);
     if (ringState) {
-      resolveRing();
+      resolveRing(ev);
       return;
     }
     var dx = ev.clientX - p.x;
@@ -2388,10 +2446,26 @@
       el.imgViewer.addEventListener('contextmenu', function (ev) {
         ev.preventDefault();
       });
+      // 环 resolve 后短暂吞掉随后的 click（含关闭叉），防长按松手的幽灵点击误关查看器
+      el.imgViewer.addEventListener('click', function (ev) {
+        if (Date.now() < ringClickShieldUntil) {
+          // 点选模式下点击环按钮需正常冒泡到 onRingButtonClick，不拦截
+          if (ev.target && ev.target.closest && ev.target.closest('.ring-btn')) return;
+          ev.stopPropagation();
+          ev.preventDefault();
+        }
+      }, true);
+    }
+
+    if (el.actionRing) {
+      el.actionRing.addEventListener('click', onRingButtonClick);
     }
 
     if (el.viewerClose) {
       el.viewerClose.addEventListener('click', function () {
+        // 防御：环刚 resolve / 仍打开时的幽灵点击不关闭查看器
+        if (Date.now() < ringClickShieldUntil) return;
+        if (el.imgViewer && el.imgViewer.classList.contains('is-ring-open')) return;
         closeViewer();
       });
     }
