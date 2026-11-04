@@ -1408,10 +1408,10 @@
   }
 
   /* ================= 折痕预演 · 纸飞机（记笔记确认动效） =================
-   * idle --保存并下一张(已选类型)--> confirming --确认保存--> animating
-   * animating: 折叠(~1s) → 贝塞尔飞行(~0.9s) → 落地反馈 → saveCurrentNote(false)
-   * 「跳过这张」/返回类型选择在 confirming 时只取消确认态，不触发动效。 */
-  var planeState = 'idle'; // idle -> confirming -> animating
+   * idle --保存并下一张(末张/单张)--> animating（折痕前奏→折叠→飞行→save）
+   * animating: 短暂折痕预演(~180ms) → 折叠(~1s) → 贝塞尔飞行(~0.9s) → 落地反馈 → saveCurrentNote(false)
+   * 一次点击连贯完成，不停在确认等待态；「跳过这张」/返回类型选择确认态取消逻辑保留（无害）。 */
+  var planeState = 'idle'; // idle -> animating
   var demoTrackIds = []; // 演示期间写入灵感库的记录 id，prepare 时清掉以便反复播放
   var PLANE_W = 150;
   var PLANE_H = 94;
@@ -1423,15 +1423,7 @@
     if (!coverTypeById(state.coverType)) return; // 未选类型：维持原早退行为
     // 折痕预演只在队列最后一张触发；非最后一张直接保存并切下一张
     if (!isLastNote()) { saveCurrentNote(false); return; }
-    enterConfirm();
-  }
-
-  function enterConfirm() {
-    if (planeState !== 'idle') return;
-    if (!coverTypeById(state.coverType)) return;
-    planeState = 'confirming';
-    if (el.noteCoverWrap) el.noteCoverWrap.classList.add('is-confirming');
-    if (el.btnNoteSave) el.btnNoteSave.textContent = '确认保存';
+    startFold();
   }
 
   function cancelConfirm() {
@@ -1515,7 +1507,8 @@
   }
 
   function startFold() {
-    if (planeState !== 'confirming') return;
+    if (planeState === 'animating') return;
+    if (planeState !== 'idle' && planeState !== 'confirming') return; // 兼容旧 confirming 状态
     var rect = buildFoldSlices();
     if (!rect) { // 无可用封面（理论上不会发生）：退回原保存逻辑
       planeState = 'idle';
@@ -1525,18 +1518,22 @@
       return;
     }
     planeState = 'animating';
-    if (el.noteCoverWrap) {
-      el.noteCoverWrap.classList.remove('is-confirming');
-      el.noteCoverWrap.classList.add('is-folding');
-    }
-    if (el.noteCover) el.noteCover.style.visibility = 'hidden'; // 原封面隐身留占位
-    if (el.btnNoteSave) el.btnNoteSave.textContent = '保存并下一张';
+    // 折痕作为同一次点击动画的前奏：短暂浮现，随即折叠起飞
+    if (el.noteCoverWrap) el.noteCoverWrap.classList.add('is-confirming');
+    if (el.btnNoteSave) el.btnNoteSave.textContent = '保存并下一张'; // 文案始终保持不变
     holdTabsVisible(); // 飞行目标 tab 持续可见（不受 1.5s 定时器影响）
-    el.ppStage.classList.add('is-fold1'); // 第一折：沿中线对折
+    setTimeout(function () {
+      if (el.noteCoverWrap) {
+        el.noteCoverWrap.classList.remove('is-confirming');
+        el.noteCoverWrap.classList.add('is-folding');
+      }
+      if (el.noteCover) el.noteCover.style.visibility = 'hidden'; // 原封面隐身留占位
+      el.ppStage.classList.add('is-fold1'); // 第一折：沿中线对折
+    }, 180);
     setTimeout(function () {
       el.ppStage.classList.add('is-fold2'); // 第二折：双翼沿对角折
-    }, 500);
-    setTimeout(settleAndFly, 1000);
+    }, 680);
+    setTimeout(settleAndFly, 1180);
   }
 
   function stageCenter() {
@@ -1748,10 +1745,10 @@
     });
   }
 
-  /** 仅在最后一张进入折痕确认态；否则串行 saveNext 直到最后一张。 */
+  /** 最后一张直接启动折叠→飞行动效（一次到位）；否则串行 saveNext 直到最后一张。 */
   function demoStart() {
     function step() {
-      if (isLastNote()) { enterConfirm(); return true; }
+      if (isLastNote()) { startFold(); return true; }
       return demoSaveNext().then(step);
     }
     return Promise.resolve(step());
@@ -2080,13 +2077,7 @@
       }).then(function () {
         return window.__demo.saveNext(); // 第 2 → 3 张（最后一张）
       }).then(function () {
-        // 最后一张：先进入折痕确认态，稍等再起飞
-        return new Promise(function (resolve) {
-          window.__demo.start(); // 已在最后一张，直接 enterConfirm
-          setTimeout(resolve, 500);
-        });
-      }).then(function () {
-        window.__demo.confirm(); // startFold：折飞机 → 飞灵感库
+        window.__demo.start(); // 已在最后一张，直接 startFold：折痕前奏 → 折叠 → 飞灵感库
       });
     };
     if (document.readyState === 'loading') {
