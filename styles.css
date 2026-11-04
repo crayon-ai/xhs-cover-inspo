@@ -2354,32 +2354,7 @@ html.is-note body {
   display: block;
 }
 
-.img-viewer__close {
-  position: absolute;
-  top: calc(12px + env(safe-area-inset-top, 0px));
-  right: 12px;
-  z-index: 3;
-  width: 34px;
-  height: 34px;
-  border: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.92);
-  font: inherit;
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.img-viewer__close:active { transform: scale(0.94); }
-
-/* 操作环打开期间：关闭叉不可命中，避免长按/松手命中等效落到叉上误关 */
-.img-viewer.is-ring-open .img-viewer__close {
-  pointer-events: none;
-}
-
-/* 操作环按钮：定位走 transform，手势统一由查看器处理；
-   z-index 高于关闭叉(3)，长按期间命中不会被叉截走 */
+/* 操作环按钮：定位走 transform，手势统一由查看器处理 */
 .action-ring {
   position: absolute;
   inset: 0;
