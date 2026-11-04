@@ -61,42 +61,38 @@
         <div class="note-stage enter">
           <p class="note-progress" id="note-progress"></p>
           <div id="note-cover-preview" class="note-cover"></div>
-          <form id="note-form" class="note-form">
+          <div id="note-type" class="note-type">
+            <p class="note-type__k">封面类型</p>
+            <div id="note-type-list" class="note-type__list" role="listbox" aria-label="封面类型"></div>
+          </div>
+          <form id="note-form" class="note-form" hidden>
+            <button type="button" id="btn-type-back" class="note-type-current"></button>
             <label class="note-field">
-              <span>为何想点</span>
-              <textarea id="field-why" rows="2" placeholder="标题、配色"></textarea>
-            </label>
-            <label class="note-field">
-              <span>感觉</span>
-              <textarea id="field-feeling" rows="2" placeholder="清爽、安静"></textarea>
-            </label>
-            <label class="note-field">
-              <span>结构亮点</span>
-              <textarea id="field-structure" rows="2" placeholder="留白、三分"></textarea>
+              <span>封面主文案</span>
+              <textarea id="field-headline" rows="2" placeholder="裸辞3个月，我后悔了吗"></textarea>
             </label>
             <label class="note-field">
-              <span>画面可学点</span>
-              <textarea id="field-learn" rows="2" placeholder="光影、字体"></textarea>
-            </label>
-            <div class="note-field note-cat">
-              <span class="note-cat__k" id="note-cat-label">分类</span>
-              <div id="note-cat-chips" class="note-cat-chips" role="listbox" aria-labelledby="note-cat-label"></div>
-            </div>
-            <label class="note-field note-field--add">
-              <span>新分类</span>
-              <input id="field-new-cat" type="text" maxlength="20" placeholder="输入名称" autocomplete="off" aria-label="新分类" />
-              <button type="button" id="btn-add-cat">添加</button>
+              <span>为什么想点</span>
+              <textarea id="field-why" rows="2" placeholder="数字太夸张了、感觉在说我"></textarea>
             </label>
             <label class="note-field">
-              <span>标签</span>
-              <input id="field-tags" type="text" placeholder="美妆, 居家" />
+              <span id="field-a-label">核心结果</span>
+              <textarea id="field-a" rows="2"></textarea>
             </label>
-            <div id="tag-preview" class="chips tag-preview" aria-live="polite"></div>
+            <label class="note-field">
+              <span id="field-b-label">证据形式</span>
+              <textarea id="field-b" rows="2"></textarea>
+            </label>
+            <label class="note-field">
+              <span>补充想法</span>
+              <textarea id="field-extra" rows="2" placeholder="配色、排版、元素、发布场景"></textarea>
+            </label>
             <div class="note-actions">
               <button type="button" id="btn-note-skip" class="note-skip">跳过这张</button>
               <button type="submit" class="btn primary">保存并下一张</button>
             </div>
           </form>
+          <button type="button" id="btn-note-skip-type" class="note-skip note-skip--type">跳过这张</button>
         </div>
       </section>
 
