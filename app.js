@@ -1678,7 +1678,7 @@
         st.hot = null;
         st.hotDist = Infinity;
         el.actionRing.classList.add('is-tap-pick');
-        shieldGhostClick();
+        // 仅 CSS 禁用关闭叉即可，不能 shield：否则随后 420ms 内的点选 click 会被捕获拦截
         return;
       }
       dismissRing();
@@ -2449,6 +2449,8 @@
       // 环 resolve 后短暂吞掉随后的 click（含关闭叉），防长按松手的幽灵点击误关查看器
       el.imgViewer.addEventListener('click', function (ev) {
         if (Date.now() < ringClickShieldUntil) {
+          // 点选模式下点击环按钮需正常冒泡到 onRingButtonClick，不拦截
+          if (ev.target && ev.target.closest && ev.target.closest('.ring-btn')) return;
           ev.stopPropagation();
           ev.preventDefault();
         }
@@ -2461,6 +2463,9 @@
 
     if (el.viewerClose) {
       el.viewerClose.addEventListener('click', function () {
+        // 防御：环刚 resolve / 仍打开时的幽灵点击不关闭查看器
+        if (Date.now() < ringClickShieldUntil) return;
+        if (el.imgViewer && el.imgViewer.classList.contains('is-ring-open')) return;
         closeViewer();
       });
     }
