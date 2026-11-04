@@ -1085,25 +1085,28 @@
     if (el.libSheet) el.libSheet.hidden = true;
   }
 
+  function legacyExtra(item) {
+    if (!item || item.coverType || item.extra) return String((item && item.extra) || '');
+    var bits = [];
+    if (item.feeling) bits.push(String(item.feeling));
+    if (item.structure) bits.push(String(item.structure));
+    if (item.learnable) bits.push(String(item.learnable));
+    return bits.join('\n');
+  }
+
   function sheetSnapshot(item) {
     var type = coverTypeById(item && item.coverType);
+    var snap = {
+      coverType: type ? type.id : '',
+      headline: String((item && item.headline) || ''),
+      whyClick: String((item && item.whyClick) || ''),
+      extra: legacyExtra(item)
+    };
     if (type) {
-      var snap = {
-        headline: String(item.headline || ''),
-        whyClick: String(item.whyClick || ''),
-        extra: String(item.extra || '')
-      };
       snap[type.a.key] = String(item[type.a.key] || '');
       snap[type.b.key] = String(item[type.b.key] || '');
-      return snap;
     }
-    return {
-      category: recordCategory(item),
-      whyClick: String(item.whyClick || ''),
-      feeling: String(item.feeling || ''),
-      structure: String(item.structure || ''),
-      learnable: String(item.learnable || '')
-    };
+    return snap;
   }
 
   function sheetNorm(value) {
@@ -1114,8 +1117,11 @@
     var base = state.sheetBase;
     var draft = state.sheetDraft;
     if (!base || !draft) return false;
-    var keys = Object.keys(base);
+    var seen = {};
+    var keys = Object.keys(base).concat(Object.keys(draft));
     for (var i = 0; i < keys.length; i++) {
+      if (seen[keys[i]]) continue;
+      seen[keys[i]] = true;
       if (sheetNorm(draft[keys[i]]) !== sheetNorm(base[keys[i]])) return true;
     }
     return false;
@@ -1188,72 +1194,61 @@
     });
   }
 
+  function setSheetCoverType(id) {
+    var type = coverTypeById(id);
+    if (!type || !state.sheetDraft) return;
+    var next = {
+      coverType: type.id,
+      headline: state.sheetDraft.headline || '',
+      whyClick: state.sheetDraft.whyClick || '',
+      extra: state.sheetDraft.extra || ''
+    };
+    next[type.a.key] = state.sheetDraft[type.a.key] || '';
+    next[type.b.key] = state.sheetDraft[type.b.key] || '';
+    state.sheetDraft = next;
+    fillSheetFields(libraryItemById(state.sheetId));
+    syncSheetSaveBtn();
+  }
+
+  function paintSheetTypes() {
+    if (!el.sheetTypeList || !state.sheetDraft) return;
+    var current = state.sheetDraft.coverType || '';
+    el.sheetTypeList.innerHTML = '';
+    COVER_TYPES.forEach(function (type) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cat-chip' + (current === type.id ? ' is-active' : '');
+      b.textContent = type.name;
+      b.addEventListener('click', function () {
+        setSheetCoverType(type.id);
+      });
+      el.sheetTypeList.appendChild(b);
+    });
+  }
+
   function fillSheetFields(item) {
     if (!el.sheetFields || !item || !state.sheetDraft) return;
     el.sheetFields.innerHTML = '';
-    var type = coverTypeById(item.coverType);
+    var row = document.createElement('div');
+    row.className = 'sheet-row sheet-row--cat';
+    var k = document.createElement('p');
+    k.className = 'sheet-k';
+    k.textContent = '封面类型';
+    var chips = document.createElement('div');
+    chips.className = 'sheet-cat-chips';
+    el.sheetTypeList = chips;
+    row.appendChild(k);
+    row.appendChild(chips);
+    el.sheetFields.appendChild(row);
+    paintSheetTypes();
+    var type = coverTypeById(state.sheetDraft.coverType);
     if (type) {
-      sheetAddField(el.sheetFields, '类型', type.name);
       sheetAddEditor(el.sheetFields, '封面主文案', 'headline');
       sheetAddEditor(el.sheetFields, '为什么想点', 'whyClick');
       sheetAddEditor(el.sheetFields, type.a.label, type.a.key);
       sheetAddEditor(el.sheetFields, type.b.label, type.b.key);
       sheetAddEditor(el.sheetFields, '补充想法', 'extra');
-      sheetAddField(el.sheetFields, '保存', formatSavedAt(item.createdAt));
-      syncSheetSaveBtn();
-      return;
     }
-    sheetAddEditor(el.sheetFields, '为何想点', 'whyClick');
-    sheetAddEditor(el.sheetFields, '感觉', 'feeling');
-    sheetAddEditor(el.sheetFields, '结构亮点', 'structure');
-    sheetAddEditor(el.sheetFields, '画面可学点', 'learnable');
-
-    var row = document.createElement('div');
-    row.className = 'sheet-row sheet-row--cat';
-    var k = document.createElement('p');
-    k.className = 'sheet-k';
-    k.textContent = '分类';
-    var chips = document.createElement('div');
-    chips.className = 'sheet-cat-chips';
-    el.sheetChips = chips;
-    var add = document.createElement('div');
-    add.className = 'sheet-cat-add';
-    var input = document.createElement('input');
-    input.type = 'text';
-    input.maxLength = 20;
-    input.placeholder = '新分类';
-    input.setAttribute('aria-label', '新分类');
-    input.autocomplete = 'off';
-    var addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.textContent = '添加';
-    function addSheetCategory() {
-      var name = normalizeCategoryName(input.value);
-      if (!name) return;
-      input.value = '';
-      if (state.sheetExtraCats.indexOf(name) === -1 && sheetCategoryNames().indexOf(name) === -1) {
-        state.sheetExtraCats.push(name);
-      }
-      state.sheetDraft.category = name;
-      paintSheetChips();
-      syncSheetSaveBtn();
-    }
-    addBtn.addEventListener('click', addSheetCategory);
-    input.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter') {
-        ev.preventDefault();
-        addSheetCategory();
-      }
-    });
-    add.appendChild(input);
-    add.appendChild(addBtn);
-    row.appendChild(k);
-    row.appendChild(chips);
-    row.appendChild(add);
-    el.sheetFields.appendChild(row);
-    paintSheetChips();
-
-    sheetAddField(el.sheetFields, '标签', tagsLine(item));
     sheetAddField(el.sheetFields, '保存', formatSavedAt(item.createdAt));
     syncSheetSaveBtn();
   }
@@ -1265,14 +1260,10 @@
     var prev = {};
     Object.keys(draft).forEach(function (key) {
       prev[key] = item[key];
-      if (key === 'category') {
-        if (sheetNorm(draft.category) !== sheetNorm(state.sheetBase.category)) {
-          item.category = sheetNorm(draft.category);
-        }
-      } else {
-        item[key] = sheetNorm(draft[key]);
-      }
+      item[key] = sheetNorm(draft[key]);
     });
+    var savedType = coverTypeById(item.coverType);
+    if (savedType) item.category = savedType.name;
     (state.sheetExtraCats || []).forEach(rememberCategory);
     openDb().then(function (db) {
       return idbPut(db, item).then(function () {
