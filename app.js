@@ -1,6 +1,23 @@
 (function () {
   'use strict';
 
+  // Flex-gap 行为检测（css-compatibility §4）：语法检测不能证明 Flex 布局中 gap 生效，
+  // 必须实测布局。检测一次加 class，驱动 .supports-flex-gap 样式层。
+  (function supportsFlexGap() {
+    var flex = document.createElement('div');
+    flex.style.position = 'absolute';
+    flex.style.visibility = 'hidden';
+    flex.style.display = 'flex';
+    flex.style.flexDirection = 'column';
+    flex.style.rowGap = '1px';
+    flex.appendChild(document.createElement('div'));
+    flex.appendChild(document.createElement('div'));
+    document.body.appendChild(flex);
+    var supported = flex.scrollHeight === 1;
+    flex.parentNode.removeChild(flex);
+    if (supported) document.documentElement.classList.add('supports-flex-gap');
+  })();
+
   var DB_NAME = 'xhs-cover-inspo';
   var DB_VERSION = 1;
   var STORE = 'inspirations';
@@ -1875,9 +1892,21 @@
     });
   }
 
+  /** 触感反馈：容器 vibrateShort(9.50+) 优先，网页/低版本回退 navigator.vibrate */
+  function hapticTick() {
+    var xhs = window.xhs;
+    var mt = xhs && xhs.miniTool;
+    var ver = Number(xhs && xhs.launchOptions && xhs.launchOptions.miniToolEnv &&
+      xhs.launchOptions.miniToolEnv.buildVersion) || 0;
+    if (mt && typeof mt.vibrateShort === 'function' && ver >= 9500) {
+      try { mt.vibrateShort({ type: 'light' }); return; } catch (e) {}
+    }
+    try { if (navigator.vibrate) navigator.vibrate(12); } catch (e2) {}
+  }
+
   function fireRing(px, py) {
     if (!el.actionRing || !state.viewerId) return;
-    try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+    hapticTick();
     var base = py > window.innerHeight * 0.45 ? -90 : 90;
     ringState = {
       px: px,
@@ -2037,12 +2066,33 @@
     askConfirm('下载这张？', doRingExport);
   }
 
-  function doRingExport() {
+  /** 小工具容器检测：平台 JS API 可用才返回 miniTool，否则 null（网页版降级） */
+  function xhsMiniTool() {
+    var mt = window.xhs && window.xhs.miniTool;
+    if (mt &&
+        typeof mt.writeTempFile === 'function' &&
+        typeof mt.saveImageToPhotosAlbum === 'function') {
+      return mt;
+    }
+    return null;
+  }
+
+  async function doRingExport() {
     var item = viewerItem();
     if (!item || !item.imageBlob) return;
     var canvas = document.createElement('canvas');
-    paintBlobToCanvas(item.imageBlob, canvas).then(function () {
-      canvasToBlob(canvas, 'image/jpeg', 0.92).then(function (blob) {
+    try {
+      await paintBlobToCanvas(item.imageBlob, canvas);
+      var mt = xhsMiniTool();
+      if (mt) {
+        // 容器版：dataURL → writeTempFile 换 filePath → 存系统相册（官方链路）
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        var res = await mt.writeTempFile({ data: dataUrl });
+        await mt.saveImageToPhotosAlbum({ filePath: res.filePath });
+        showViewerToast('已保存到相册');
+      } else {
+        // 网页版降级：a[download]（容器内被拦截，不会走到这里）
+        var blob = await canvasToBlob(canvas, 'image/jpeg', 0.92);
         if (!blob) {
           showViewerToast('导出失败');
           return;
@@ -2056,10 +2106,10 @@
         document.body.removeChild(a);
         setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
         showViewerToast('已保存');
-      });
-    }).catch(function () {
+      }
+    } catch (e) {
       showViewerToast('导出失败');
-    });
+    }
   }
 
   function ringDesc() {
