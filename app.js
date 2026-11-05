@@ -2077,6 +2077,108 @@
     return null;
   }
 
+  /** 关注作者能力检测：miniTool 关注 API + 客户端 ≥ 9.51（buildVersion 9510），否则 null */
+  function xhsFollowApi() {
+    var xhs = window.xhs;
+    var mt = xhs && xhs.miniTool;
+    var ver = Number(xhs && xhs.launchOptions && xhs.launchOptions.miniToolEnv &&
+      xhs.launchOptions.miniToolEnv.buildVersion) || 0;
+    if (!mt || ver < 9510) return null;
+    if (typeof mt.followAuthor !== 'function' || typeof mt.getFollowStatus !== 'function') return null;
+    return mt;
+  }
+
+  /** 解析 getFollowStatus 返回：兼容 res.follow_status / res.followStatus / 纯数字 */
+  function parseFollowStatus(res) {
+    if (res == null) return NaN;
+    if (typeof res === 'number') return res;
+    var v = res.follow_status != null ? res.follow_status : res.followStatus;
+    return Number(v);
+  }
+
+  /** 从 reject/返回对象取错误码：errCode 或 code */
+  function parseErrCode(err) {
+    if (!err) return 0;
+    var v = err.errCode != null ? err.errCode : err.code;
+    return Number(v) || 0;
+  }
+
+  /** 极简轻提示：短暂改按钮文案，1s 后恢复 */
+  var followTipTimer = null;
+  function followTip(text) {
+    var btn = el.btnFollowAuthor;
+    if (!btn) return;
+    clearTimeout(followTipTimer);
+    btn.textContent = text;
+    followTipTimer = setTimeout(function () {
+      if (!btn.disabled) btn.textContent = '关注';
+    }, 1000);
+  }
+
+  /** follow_status → 按钮文案/可用态；-1 或未知保持「关注」可用，不留死按钮 */
+  function renderFollowStatus(status) {
+    var btn = el.btnFollowAuthor;
+    if (!btn) return;
+    if (status === 1) {
+      btn.textContent = '已关注';
+      btn.disabled = true;
+    } else if (status === 2) {
+      btn.textContent = '作者';
+      btn.disabled = true;
+    } else {
+      btn.textContent = '关注';
+      btn.disabled = false;
+    }
+  }
+
+  function refreshFollowStatus() {
+    var api = xhsFollowApi();
+    var btn = el.btnFollowAuthor;
+    if (!api || !btn) return;
+    Promise.resolve().then(function () { return api.getFollowStatus(); }).then(function (res) {
+      var status = parseFollowStatus(res != null && res.data != null ? res.data : res);
+      if (!isNaN(status)) renderFollowStatus(status);
+    }).catch(function () {
+      // 查询失败保持默认「关注」可用
+    });
+  }
+
+  function setupFollowAuthor() {
+    var api = xhsFollowApi();
+    var btn = el.btnFollowAuthor;
+    if (!api || !btn) return; // 不可用保持 hidden
+    btn.hidden = false;
+    refreshFollowStatus();
+  }
+
+  async function onFollowAuthorClick() {
+    var api = xhsFollowApi();
+    var btn = el.btnFollowAuthor;
+    if (!api || !btn || btn.disabled) return;
+    btn.disabled = true; // 防抖：确认弹窗期间不可重复点
+    try {
+      await api.followAuthor();
+      var status = NaN;
+      try {
+        var res = await api.getFollowStatus();
+        status = parseFollowStatus(res != null && res.data != null ? res.data : res);
+      } catch (e2) {}
+      renderFollowStatus(status); // NaN/-1 → 恢复「关注」可用
+    } catch (e) {
+      var code = parseErrCode(e);
+      renderFollowStatus(NaN); // 失败恢复「关注」可用
+      if (code === 20002) {
+        // 取消确认/拒登：静默
+      } else if (code === 15404) {
+        followTip('今天太多次了');
+      } else if (code === 10003) {
+        followTip('请稍候');
+      }
+    } finally {
+      if (btn.textContent !== '已关注' && btn.textContent !== '作者') btn.disabled = false;
+    }
+  }
+
   async function doRingExport() {
     var item = viewerItem();
     if (!item || !item.imageBlob) return;
@@ -2677,6 +2779,7 @@
     el.sheetConfirmOk = $('sheet-confirm-ok');
     el.sheetConfirmBackdrop = $('sheet-confirm-backdrop');
     el.btnRepick = $('btn-repick');
+    el.btnFollowAuthor = $('btn-follow-author');
     el.imgViewer = $('img-viewer');
     el.viewerCanvas = $('viewer-canvas');
     el.viewerLike = $('viewer-like');
@@ -2709,6 +2812,12 @@
     if (el.btnRepick) {
       el.btnRepick.addEventListener('click', function () {
         resetPick();
+      });
+    }
+
+    if (el.btnFollowAuthor) {
+      el.btnFollowAuthor.addEventListener('click', function () {
+        onFollowAuthorClick();
       });
     }
 
@@ -2982,6 +3091,7 @@
   function init() {
     bind();
     bindChromeMotion();
+    setupFollowAuthor();
     showView('import');
     refreshLibrary().catch(function () {});
   }

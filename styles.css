@@ -494,6 +494,37 @@ html.is-note body {
 
 .btn.ghost:active:not(:disabled) { transform: scale(0.98); }
 
+/* 关注作者：导入舞台底部小号胶囊，极简不打扰 */
+.follow-pill {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 18px; /* Chrome61 基线回退 */
+  bottom: calc(18px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  z-index: 6;
+  background: var(--card-solid);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  min-height: 32px;
+  width: auto;
+  margin: 0;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+}
+
+.follow-pill:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.follow-pill:active:not(:disabled) { transform: translateX(-50%) scale(0.97); }
+
+.import-stage.is-pick .follow-pill { display: none; }
+
 .btn.danger {
   color: var(--danger);
   border-color: #f0d0d0;
