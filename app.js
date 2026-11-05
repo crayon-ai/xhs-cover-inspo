@@ -537,10 +537,21 @@
       var cx1 = edges[e + 1] - 1;
       if (cx1 - cx0 + 1 < minColW) continue;
       var cg = findGutterRunsInCol(data, imgW, imgH, cx0, cx1);
-      if (cg.length < 2) continue;
+      if (cg.length < 1) continue;
       for (var g2 = 0; g2 + 1 < cg.length; g2++) {
         var band2 = { y0: cg[g2].y1 + 1, y1: cg[g2 + 1].y0 - 1 };
         tiles = tiles.concat(cardTilesInBand(data, imgW, imgH, band2, cx0, cx1));
+      }
+      // Trailing card below the last per-column gutter. Bottom cards often
+      // have no following ~250 gutter (only title/author white, then the
+      // tab-bar chrome), so the between-gutter loop never sees them and the
+      // light-cover projection fallback crops an embedded dark island.
+      var chromeH = Math.max(80, Math.round(imgH * 0.08));
+      var trailY1 = imgH - 1 - chromeH;
+      var lastG = cg[cg.length - 1];
+      if (trailY1 - lastG.y1 > Math.round(imgW * 0.12)) {
+        var bandT = { y0: lastG.y1 + 1, y1: trailY1 };
+        tiles = tiles.concat(cardTilesInBand(data, imgW, imgH, bandT, cx0, cx1));
       }
     }
     return tiles;
@@ -576,8 +587,9 @@
         var dup = false;
         for (var k2 = 0; k2 < cardTiles.length; k2++) {
           var t2 = cardTiles[k2];
-          var ov2 = Math.min(blk.y1, t2.y1) - Math.max(blk.y0, t2.y0) + 1;
-          if (ov2 > (blk.y1 - blk.y0 + 1) * 0.5) {
+          var ovY = Math.min(blk.y1, t2.y1) - Math.max(blk.y0, t2.y0) + 1;
+          var ovX = Math.min(col.x1 + 1, t2.x + t2.w) - Math.max(col.x0, t2.x);
+          if (ovX > 0 && ovY > (blk.y1 - blk.y0 + 1) * 0.5) {
             dup = true;
             break;
           }
