@@ -1,6 +1,23 @@
 (function () {
   'use strict';
 
+  // Flex-gap 行为检测（css-compatibility §4）：语法检测不能证明 Flex 布局中 gap 生效，
+  // 必须实测布局。检测一次加 class，驱动 .supports-flex-gap 样式层。
+  (function supportsFlexGap() {
+    var flex = document.createElement('div');
+    flex.style.position = 'absolute';
+    flex.style.visibility = 'hidden';
+    flex.style.display = 'flex';
+    flex.style.flexDirection = 'column';
+    flex.style.rowGap = '1px';
+    flex.appendChild(document.createElement('div'));
+    flex.appendChild(document.createElement('div'));
+    document.body.appendChild(flex);
+    var supported = flex.scrollHeight === 1;
+    flex.parentNode.removeChild(flex);
+    if (supported) document.documentElement.classList.add('supports-flex-gap');
+  })();
+
   var DB_NAME = 'xhs-cover-inspo';
   var DB_VERSION = 1;
   var STORE = 'inspirations';
@@ -1875,9 +1892,21 @@
     });
   }
 
+  /** 触感反馈：容器 vibrateShort(9.50+) 优先，网页/低版本回退 navigator.vibrate */
+  function hapticTick() {
+    var xhs = window.xhs;
+    var mt = xhs && xhs.miniTool;
+    var ver = Number(xhs && xhs.launchOptions && xhs.launchOptions.miniToolEnv &&
+      xhs.launchOptions.miniToolEnv.buildVersion) || 0;
+    if (mt && typeof mt.vibrateShort === 'function' && ver >= 9500) {
+      try { mt.vibrateShort({ type: 'light' }); return; } catch (e) {}
+    }
+    try { if (navigator.vibrate) navigator.vibrate(12); } catch (e2) {}
+  }
+
   function fireRing(px, py) {
     if (!el.actionRing || !state.viewerId) return;
-    try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+    hapticTick();
     var base = py > window.innerHeight * 0.45 ? -90 : 90;
     ringState = {
       px: px,
@@ -2037,12 +2066,135 @@
     askConfirm('下载这张？', doRingExport);
   }
 
-  function doRingExport() {
+  /** 小工具容器检测：平台 JS API 可用才返回 miniTool，否则 null（网页版降级） */
+  function xhsMiniTool() {
+    var mt = window.xhs && window.xhs.miniTool;
+    if (mt &&
+        typeof mt.writeTempFile === 'function' &&
+        typeof mt.saveImageToPhotosAlbum === 'function') {
+      return mt;
+    }
+    return null;
+  }
+
+  /** 关注作者能力检测：miniTool 关注 API + 客户端 ≥ 9.51（buildVersion 9510），否则 null */
+  function xhsFollowApi() {
+    var xhs = window.xhs;
+    var mt = xhs && xhs.miniTool;
+    var ver = Number(xhs && xhs.launchOptions && xhs.launchOptions.miniToolEnv &&
+      xhs.launchOptions.miniToolEnv.buildVersion) || 0;
+    if (!mt || ver < 9510) return null;
+    if (typeof mt.followAuthor !== 'function' || typeof mt.getFollowStatus !== 'function') return null;
+    return mt;
+  }
+
+  /** 解析 getFollowStatus 返回：兼容 res.follow_status / res.followStatus / 纯数字 */
+  function parseFollowStatus(res) {
+    if (res == null) return NaN;
+    if (typeof res === 'number') return res;
+    var v = res.follow_status != null ? res.follow_status : res.followStatus;
+    return Number(v);
+  }
+
+  /** 从 reject/返回对象取错误码：errCode 或 code */
+  function parseErrCode(err) {
+    if (!err) return 0;
+    var v = err.errCode != null ? err.errCode : err.code;
+    return Number(v) || 0;
+  }
+
+  /** 极简轻提示：短暂改按钮文案，1s 后恢复 */
+  var followTipTimer = null;
+  function followTip(text) {
+    var btn = el.btnFollowAuthor;
+    if (!btn) return;
+    clearTimeout(followTipTimer);
+    btn.textContent = text;
+    followTipTimer = setTimeout(function () {
+      if (!btn.disabled) btn.textContent = '关注';
+    }, 1000);
+  }
+
+  /** follow_status → 按钮文案/可用态；-1 或未知保持「关注」可用，不留死按钮 */
+  function renderFollowStatus(status) {
+    var btn = el.btnFollowAuthor;
+    if (!btn) return;
+    if (status === 1) {
+      btn.textContent = '已关注';
+      btn.disabled = true;
+    } else if (status === 2) {
+      btn.textContent = '作者';
+      btn.disabled = true;
+    } else {
+      btn.textContent = '关注';
+      btn.disabled = false;
+    }
+  }
+
+  function refreshFollowStatus() {
+    var api = xhsFollowApi();
+    var btn = el.btnFollowAuthor;
+    if (!api || !btn) return;
+    Promise.resolve().then(function () { return api.getFollowStatus(); }).then(function (res) {
+      var status = parseFollowStatus(res != null && res.data != null ? res.data : res);
+      if (!isNaN(status)) renderFollowStatus(status);
+    }).catch(function () {
+      // 查询失败保持默认「关注」可用
+    });
+  }
+
+  function setupFollowAuthor() {
+    var api = xhsFollowApi();
+    var btn = el.btnFollowAuthor;
+    if (!api || !btn) return; // 不可用保持 hidden
+    btn.hidden = false;
+    refreshFollowStatus();
+  }
+
+  async function onFollowAuthorClick() {
+    var api = xhsFollowApi();
+    var btn = el.btnFollowAuthor;
+    if (!api || !btn || btn.disabled) return;
+    btn.disabled = true; // 防抖：确认弹窗期间不可重复点
+    try {
+      await api.followAuthor();
+      var status = NaN;
+      try {
+        var res = await api.getFollowStatus();
+        status = parseFollowStatus(res != null && res.data != null ? res.data : res);
+      } catch (e2) {}
+      renderFollowStatus(status); // NaN/-1 → 恢复「关注」可用
+    } catch (e) {
+      var code = parseErrCode(e);
+      renderFollowStatus(NaN); // 失败恢复「关注」可用
+      if (code === 20002) {
+        // 取消确认/拒登：静默
+      } else if (code === 15404) {
+        followTip('今天太多次了');
+      } else if (code === 10003) {
+        followTip('请稍候');
+      }
+    } finally {
+      if (btn.textContent !== '已关注' && btn.textContent !== '作者') btn.disabled = false;
+    }
+  }
+
+  async function doRingExport() {
     var item = viewerItem();
     if (!item || !item.imageBlob) return;
     var canvas = document.createElement('canvas');
-    paintBlobToCanvas(item.imageBlob, canvas).then(function () {
-      canvasToBlob(canvas, 'image/jpeg', 0.92).then(function (blob) {
+    try {
+      await paintBlobToCanvas(item.imageBlob, canvas);
+      var mt = xhsMiniTool();
+      if (mt) {
+        // 容器版：dataURL → writeTempFile 换 filePath → 存系统相册（官方链路）
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        var res = await mt.writeTempFile({ data: dataUrl });
+        await mt.saveImageToPhotosAlbum({ filePath: res.filePath });
+        showViewerToast('已保存到相册');
+      } else {
+        // 网页版降级：a[download]（容器内被拦截，不会走到这里）
+        var blob = await canvasToBlob(canvas, 'image/jpeg', 0.92);
         if (!blob) {
           showViewerToast('导出失败');
           return;
@@ -2056,10 +2208,10 @@
         document.body.removeChild(a);
         setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
         showViewerToast('已保存');
-      });
-    }).catch(function () {
+      }
+    } catch (e) {
       showViewerToast('导出失败');
-    });
+    }
   }
 
   function ringDesc() {
@@ -2627,6 +2779,7 @@
     el.sheetConfirmOk = $('sheet-confirm-ok');
     el.sheetConfirmBackdrop = $('sheet-confirm-backdrop');
     el.btnRepick = $('btn-repick');
+    el.btnFollowAuthor = $('btn-follow-author');
     el.imgViewer = $('img-viewer');
     el.viewerCanvas = $('viewer-canvas');
     el.viewerLike = $('viewer-like');
@@ -2659,6 +2812,12 @@
     if (el.btnRepick) {
       el.btnRepick.addEventListener('click', function () {
         resetPick();
+      });
+    }
+
+    if (el.btnFollowAuthor) {
+      el.btnFollowAuthor.addEventListener('click', function () {
+        onFollowAuthorClick();
       });
     }
 
@@ -2932,6 +3091,7 @@
   function init() {
     bind();
     bindChromeMotion();
+    setupFollowAuthor();
     showView('import');
     refreshLibrary().catch(function () {});
   }

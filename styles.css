@@ -45,7 +45,8 @@ body {
 #app {
   max-width: 480px;
   margin: 0 auto;
-  padding: calc(8px + env(safe-area-inset-top, 0px)) 20px calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 20px 12px; /* env 的 Chrome61 基线 */
+  padding: calc(8px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) 20px calc(12px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   min-height: 100vh;
 }
 
@@ -161,7 +162,7 @@ html.is-dark-chrome .tab.is-active {
 html.is-library,
 html.is-library body {
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -185,10 +186,13 @@ html.is-library body {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-top: 0; /* env 的 Chrome61 基线 */
+  padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  padding-right: 12px;
+  padding-right: max(12px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px)));
   padding-bottom: 0;
-  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-left: 12px;
+  padding-left: max(12px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
 }
 
 #app.is-library main {
@@ -208,14 +212,15 @@ html.is-library body {
 }
 
 #app.is-library .lib-dock {
-  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 8px; /* env 的 Chrome61 基线 */
+  padding-bottom: calc(8px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 }
 
 /* Note page: same fixed shell as library — cover stays pinned, only fields scroll. */
 html.is-note,
 html.is-note body {
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -239,10 +244,13 @@ html.is-note body {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-top: 0; /* env 的 Chrome61 基线 */
+  padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  padding-right: 12px;
+  padding-right: max(12px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px)));
   padding-bottom: 0;
-  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-left: 12px;
+  padding-left: max(12px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
   background: #ffffff;
 }
 
@@ -289,20 +297,23 @@ html.is-note body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;
-  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 96px; /* env 的 Chrome61 基线 */
+  padding-bottom: calc(96px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
 }
 
 /* ——— Tabs · white capsule ——— */
 .tabs {
   position: fixed;
   z-index: 80;
-  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  bottom: 10px; /* env 的 Chrome61 基线 */
+  bottom: calc(10px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   left: 50%;
   width: max-content;
   max-width: calc(100% - 28px);
   margin: 0;
   display: grid;
   grid-template-columns: repeat(3, auto);
+  grid-gap: 2px; /* Chrome61 只认 grid-gap；gap 为 66+ 别名 */
   gap: 2px;
   padding: 3px;
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -483,6 +494,37 @@ html.is-note body {
 
 .btn.ghost:active:not(:disabled) { transform: scale(0.98); }
 
+/* 关注作者：导入舞台底部小号胶囊，极简不打扰 */
+.follow-pill {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 18px; /* Chrome61 基线回退 */
+  bottom: calc(18px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  z-index: 6;
+  background: var(--card-solid);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  min-height: 32px;
+  width: auto;
+  margin: 0;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+}
+
+.follow-pill:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.follow-pill:active:not(:disabled) { transform: translateX(-50%) scale(0.97); }
+
+.import-stage.is-pick .follow-pill { display: none; }
+
 .btn.danger {
   color: var(--danger);
   border-color: #f0d0d0;
@@ -491,6 +533,7 @@ html.is-note body {
 .row-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-gap: 8px; /* Chrome61 只认 grid-gap */
   gap: 8px;
   margin: 8px 0;
 }
@@ -556,8 +599,10 @@ html.is-note body {
   position: absolute;
   left: 50%;
   top: calc(14vh + 132px);
-  width: min(88vw, 380px);
-  height: min(88vw, 380px);
+  width: 88vw;
+  max-width: 380px;
+  height: 88vw;
+  max-height: 380px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: radial-gradient(
@@ -735,7 +780,7 @@ html.is-note body {
 
 #app.is-import .import-hit {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   z-index: 2;
   flex: none;
   min-height: 0;
@@ -791,6 +836,7 @@ html.is-note body {
   left: 50%;
   top: 50%;
   width: 138px;
+  height: 184px; /* 138 * 4/3，aspect-ratio 的 Chrome61 基线 */
   aspect-ratio: 3 / 4;
   margin-left: -69px;
   margin-top: -92px;
@@ -828,7 +874,7 @@ html.is-note body {
 .import-fake-card canvas,
 .import-fake-card img {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   width: 100%;
   height: 100%;
   display: block;
@@ -918,7 +964,7 @@ html.is-note body {
 
 .import-ring__bloom {
   position: absolute;
-  inset: -14px;
+  top: -14px; right: -14px; bottom: -14px; left: -14px;
   border-radius: 50%;
   background: conic-gradient(
     from -40deg,
@@ -938,7 +984,7 @@ html.is-note body {
 
 .import-ring__arc {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   border-radius: 50%;
   background: conic-gradient(
     from -40deg,
@@ -1018,7 +1064,7 @@ html.is-note body {
 
 .import-actions {
   display: grid;
-  gap: 8px;
+  grid-gap: 8px;
   padding: 0 2px 4px;
 }
 
@@ -1079,6 +1125,7 @@ html.is-note body {
   -webkit-overflow-scrolling: touch;
   /* centers the first card exactly while neighbors bleed off both edges;
      % refers to the rail's own width, so it holds at any device width */
+  padding: 30px 24px 40px; /* max()/min() 的 Chrome61 基线 */
   padding: 30px max(24px, calc(50% - min(230px, 60vw) / 2)) 40px;
   scrollbar-width: none;
   touch-action: pan-x;
@@ -1094,6 +1141,8 @@ html.is-note body {
 
 .cover-card {
   position: relative;
+  flex: 0 0 230px; /* min() 的 Chrome61 基线 */
+  width: 230px;
   flex: 0 0 min(230px, 60vw);
   width: min(230px, 60vw);
   margin: 0;
@@ -1112,6 +1161,8 @@ html.is-note body {
 
 .cover-face {
   display: block;
+  position: relative;
+  padding-top: 133.33%; /* 3/4 比例盒：aspect-ratio 的 Chrome61 基线方案 */
   border-radius: 18px;
   overflow: hidden;
   background: #f3f3f3;
@@ -1123,8 +1174,11 @@ html.is-note body {
 
 .cover-face canvas,
 .cover-face img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  aspect-ratio: 3 / 4;
+  height: 100%;
   object-fit: cover;
   display: block;
   background: #f3f3f3;
@@ -1205,6 +1259,8 @@ html.is-note body {
   display: block;
   width: auto;
   height: auto;
+  max-width: 200px; /* min() 的 Chrome61 基线 */
+  max-height: 260px;
   max-width: min(200px, 52vw);
   max-height: min(260px, 32vh);
   border-radius: 16px;
@@ -1545,7 +1601,7 @@ html.is-note body {
 
 .lib-empty {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1615,7 +1671,7 @@ html.is-note body {
 
 /* ——— Library · category rows（分类横滑浏览）——— */
 .lib-stage {
-  --lib-row-h: clamp(150px, 46vw, 230px);
+  --lib-row-h: 46vw; /* clamp 的 Chrome61 基线，档位由卡片 min/max-height 承担 */
 }
 
 .lib-rows {
@@ -1671,6 +1727,7 @@ html.is-note body {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   min-height: calc(var(--lib-row-h) + 8px);
+  max-height: 238px; /* clamp 上限的 Chrome61 基线 */
 }
 
 .lib-row-track::-webkit-scrollbar { display: none; }
@@ -1679,6 +1736,8 @@ html.is-note body {
 .lib-row-card {
   flex: 0 0 auto;
   height: var(--lib-row-h);
+  min-height: 150px;
+  max-height: 230px;
   width: auto;
   max-width: 78vw;
   border-radius: 16px;
@@ -1695,7 +1754,7 @@ html.is-note body {
 /* ——— Cover detail sheet ——— */
 .lib-sheet {
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   z-index: 40;
   display: flex;
   align-items: flex-end;
@@ -1704,7 +1763,7 @@ html.is-note body {
 
 .lib-sheet__backdrop {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   border: 0;
   padding: 0;
   margin: 0;
@@ -1715,6 +1774,9 @@ html.is-note body {
 .lib-sheet__panel {
   position: relative;
   z-index: 1;
+  width: 100%; /* min() 的 Chrome61 基线 */
+  max-width: 480px;
+  max-height: 88vh;
   width: min(480px, 100%);
   max-height: min(88vh, 760px);
   max-height: min(88dvh, 760px);
@@ -1722,7 +1784,8 @@ html.is-note body {
   background: #ffffff;
   color: #1a1a1a;
   border-radius: 22px 22px 0 0;
-  padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 16px 16px; /* env 的 Chrome61 基线 */
+  padding: 8px 16px calc(16px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   box-shadow: 0 -16px 40px rgba(20, 20, 20, 0.12);
   animation: sheet-up var(--dur) var(--ease-out);
   -webkit-overflow-scrolling: touch;
@@ -1875,6 +1938,7 @@ html.is-note body {
 .sheet-cat-add {
   display: grid;
   grid-template-columns: 1fr auto;
+  grid-gap: 8px;
   gap: 8px;
   margin-top: 8px;
 }
@@ -1957,7 +2021,7 @@ html.is-note body {
 
 .sheet-confirm {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   z-index: 3;
   display: flex;
   align-items: center;
@@ -1967,7 +2031,7 @@ html.is-note body {
 
 .sheet-confirm__backdrop {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   border: 0;
   padding: 0;
   margin: 0;
@@ -1977,6 +2041,8 @@ html.is-note body {
 
 .sheet-confirm__box {
   position: relative;
+  width: 100%; /* min() 的 Chrome61 基线 */
+  max-width: 300px;
   width: min(300px, 100%);
   background: #ffffff;
   color: #1a1a1a;
@@ -1997,6 +2063,7 @@ html.is-note body {
 .sheet-confirm__actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-gap: 8px; /* Chrome61 只认 grid-gap */
   gap: 8px;
 }
 
@@ -2124,7 +2191,7 @@ html.is-note body {
 /* 确认态：虚线折痕浮现（中线 + 两条对角，纸飞机折法） */
 .pp-creases {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
@@ -2157,7 +2224,7 @@ html.is-note body {
 
 .fp {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   transform-style: preserve-3d;
   will-change: transform;
 }
@@ -2165,7 +2232,7 @@ html.is-note body {
 .fp > .pp-face,
 .fp > .pp-back {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   /* 切片形状已烘进 canvas，这里不再用 clip-path：
      clip/filter 等分组属性会让 Chromium 跳过 backface 剔除，露出镜像正面 */
   backface-visibility: hidden;
@@ -2185,7 +2252,7 @@ html.is-note body {
 .fp::after {
   content: '';
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   pointer-events: none;
   background: linear-gradient(105deg, rgba(0, 0, 0, 0.16), rgba(255, 255, 255, 0.1) 55%, rgba(0, 0, 0, 0.22));
   opacity: 0;
@@ -2268,7 +2335,7 @@ html.is-note body {
 .tab.pp-hit::before {
   content: '';
   position: absolute;
-  inset: -3px;
+  top: -3px; right: -3px; bottom: -3px; left: -3px;
   border-radius: 999px;
   box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.22);
   animation: ppTabGlow 0.65s ease forwards;
@@ -2314,7 +2381,7 @@ html.is-note body {
 /* ——— 全屏封面查看 + 长按操作环 ——— */
 .img-viewer {
   position: fixed;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   z-index: 30; /* lib-sheet(40) 之下：查看描述时弹层盖在查看器上 */
   display: flex;
   align-items: center;
@@ -2356,7 +2423,8 @@ html.is-note body {
 
 .img-viewer__like {
   position: absolute;
-  top: calc(16px + env(safe-area-inset-top, 0px));
+  top: 16px; /* env 的 Chrome61 基线 */
+  top: calc(16px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
   left: 16px;
   color: var(--coral);
   filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.4));
@@ -2371,7 +2439,7 @@ html.is-note body {
 /* 操作环按钮：定位走 transform，手势统一由查看器处理 */
 .action-ring {
   position: absolute;
-  inset: 0;
+  top: 0; right: 0; bottom: 0; left: 0;
   z-index: 4;
   pointer-events: none;
 }
@@ -2418,7 +2486,8 @@ html.is-note body {
 .viewer-toast {
   position: absolute;
   left: 50%;
-  bottom: calc(44px + env(safe-area-inset-bottom, 0px));
+  bottom: 44px; /* env 的 Chrome61 基线 */
+  bottom: calc(44px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   transform: translateX(-50%);
   z-index: 3;
   background: rgba(20, 20, 20, 0.85);
@@ -2479,3 +2548,24 @@ html.is-note body {
     transition: none;
   }
 }
+
+/* ——— Chrome61 Flex-gap 基线（css-compatibility §4：margin 基线 + 行为检测启用 gap）———
+   Chrome 61 认识 gap 语法但 Flex 布局不生效（声明被丢），因此用相邻兄弟 margin 做基线；
+   JS 启动时行为检测 supports-flex-gap（实测布局），支持时清除 margin 只留 gap。 */
+.brand-row > * + * { margin-left: 8px; }
+.stamp-badge > * + * { margin-left: 6px; }
+.section-head > * + * { margin-left: 8px; }
+.import-stage > * + * { margin-top: 16px; }
+.cand-rail > * + * { margin-left: 16px; }
+.note-type__list > * + * { margin-top: 10px; }
+.note-form > * + * { margin-top: 16px; }
+.sheet-cat-chips > * + * { margin-left: 8px; }
+
+.supports-flex-gap .brand-row > * + * { margin-left: 0; }
+.supports-flex-gap .stamp-badge > * + * { margin-left: 0; }
+.supports-flex-gap .section-head > * + * { margin-left: 0; }
+.supports-flex-gap .import-stage > * + * { margin-top: 0; }
+.supports-flex-gap .cand-rail > * + * { margin-left: 0; }
+.supports-flex-gap .note-type__list > * + * { margin-top: 0; }
+.supports-flex-gap .note-form > * + * { margin-top: 0; }
+.supports-flex-gap .sheet-cat-chips > * + * { margin-left: 0; }
