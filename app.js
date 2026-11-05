@@ -181,9 +181,33 @@
     });
   }
 
+  // 兜底弹窗：msg 转字符串并 trim，空则直接 return，绝不 alert('')/alert(undefined)。
+  // 背景：小工具容器对异步续体（await 之后）里调用的原生 alert 存在桥接缺陷，
+  // 文案可能丢失 → 弹出「空白系统框 + 红色确定」；这里至少保证不传空文案。
+  function safeAlert(msg) {
+    var s = String(msg == null ? '' : msg).trim();
+    if (!s) return;
+    alert(s);
+  }
+
+  // 相册文件 MIME 可能为空字符串，此时按扩展名判断是否图片，避免误报「请选择图片文件」
+  function isImageFile(f) {
+    if (!f) return false;
+    if (f.type && f.type.indexOf('image/') === 0) return true;
+    var name = (f.name || '').toLowerCase();
+    return /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/.test(name);
+  }
+
   async function fileToBitmap(file) {
+    // 优先 createImageBitmap；小工具 WebView 上部分相册 File 会让 CIB reject，
+    // 失败不抛出，降级到 Image(blob:)，再不行降级 FileReader → dataURL
+    //（App 对 blob: 更严时），避免中断导入链路。
     if (typeof createImageBitmap === 'function') {
-      return createImageBitmap(file);
+      try {
+        return await createImageBitmap(file);
+      } catch (e) {
+        // 降级继续
+      }
     }
     return new Promise(function (resolve, reject) {
       var url = URL.createObjectURL(file);
@@ -194,7 +218,22 @@
       };
       img.onerror = function () {
         URL.revokeObjectURL(url);
-        reject(new Error('图片加载失败'));
+        // 再试 FileReader → dataURL（App 对 blob: 更严时）
+        var reader = new FileReader();
+        reader.onload = function () {
+          var img2 = new Image();
+          img2.onload = function () {
+            resolve(img2);
+          };
+          img2.onerror = function () {
+            reject(new Error('图片加载失败'));
+          };
+          img2.src = reader.result;
+        };
+        reader.onerror = function () {
+          reject(new Error('图片加载失败'));
+        };
+        reader.readAsDataURL(file);
       };
       img.src = url;
     });
@@ -679,33 +718,17 @@
   }
 
   function paintBlobToCanvas(blob, targetCanvas) {
-    return new Promise(function (resolve, reject) {
-      if (typeof createImageBitmap === 'function') {
-        createImageBitmap(blob).then(function (bmp) {
-          targetCanvas.width = bmp.width;
-          targetCanvas.height = bmp.height;
-          var ctx = targetCanvas.getContext('2d');
-          ctx.drawImage(bmp, 0, 0);
-          if (bmp.close) bmp.close();
-          resolve();
-        }).catch(reject);
-      } else {
-        var url = URL.createObjectURL(blob);
-        var img = new Image();
-        img.onload = function () {
-          targetCanvas.width = img.naturalWidth;
-          targetCanvas.height = img.naturalHeight;
-          var ctx = targetCanvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          URL.revokeObjectURL(url);
-          resolve();
-        };
-        img.onerror = function () {
-          URL.revokeObjectURL(url);
-          reject(new Error('预览失败'));
-        };
-        img.src = url;
-      }
+    // 与 fileToBitmap 同策略：优先 CIB，失败降级 Image(blob:)，再降级
+    // FileReader → dataURL，避免小工具 WebView 对 canvas.toBlob 的 JPEG
+    // 调 CIB reject 时中断预览链路。
+    return fileToBitmap(blob).then(function (bmpOrImg) {
+      var w = bmpOrImg.width || bmpOrImg.naturalWidth;
+      var h = bmpOrImg.height || bmpOrImg.naturalHeight;
+      targetCanvas.width = w;
+      targetCanvas.height = h;
+      var ctx = targetCanvas.getContext('2d');
+      ctx.drawImage(bmpOrImg, 0, 0);
+      if (bmpOrImg.close) bmpOrImg.close();
     });
   }
 
@@ -2315,22 +2338,28 @@
 
 
   async function onFilesChosen(fileList) {
-    var files = Array.prototype.slice.call(fileList || []).filter(function (f) {
-      return f && f.type && f.type.indexOf('image/') === 0;
-    });
+    var files = Array.prototype.slice.call(fileList || []).filter(isImageFile);
     if (!files.length) {
-      alert('请选择图片文件');
+      safeAlert('请选择图片文件');
       return;
     }
     state.pendingFiles = files;
     state.pendingBitmaps = [];
+    // 单张读取失败静默跳过，绝不在这里 alert：
+    // 该路径仍可能 slicePending 成功出结果（如 1/4），而小工具容器对
+    // 异步续体里的原生 alert 有「文案丢失→空白框+红色确定」的桥接缺陷，
+    // 这正是线上空白弹窗的来源。
     for (var i = 0; i < files.length; i++) {
       try {
         var bmp = await fileToBitmap(files[i]);
         state.pendingBitmaps.push(bmp);
       } catch (e) {
-        alert('有一张图无法读取，已跳过');
+        // 静默跳过无法读取的文件
       }
+    }
+    if (!state.pendingBitmaps.length) {
+      safeAlert('图片读取失败，请换一张截图试试');
+      return;
     }
     await slicePending();
   }
@@ -2358,14 +2387,15 @@
         all = all.concat(part);
       }
     } catch (e) {
-      alert('切分失败：' + (e && e.message ? e.message : '未知错误'));
+      // 固定中文前缀，不把可能为空的 e.message 单独 alert
+      safeAlert('切分失败：' + (e && e.message ? e.message : '未知错误'));
       showPick(false);
       return;
     }
     state.candidates = all;
     state.selectedIds = {};
     if (!all.length) {
-      alert('没有切出可用封面，请换一张更接近双列信息流的整屏截图试试');
+      safeAlert('没有切出可用封面，请换一张更接近双列信息流的整屏截图试试');
       showPick(false);
       if (el.pickRail) el.pickRail.innerHTML = '';
       return;
