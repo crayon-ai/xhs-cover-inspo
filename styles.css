@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Source Han Sans SC Title";
+  src: url("./assets/fonts/SourceHanSansSC-Heavy-title.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: block;
+}
+
 :root {
   --bg: #FFFFFF;
   --bg-soft: #F7F6F1;
@@ -669,13 +677,36 @@ html.is-note body {
 
 /* Empty import: dashed viewfinder around the ring, one short line below.
    Hidden once covers are on screen. */
+.import-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 4;
+  margin: 0;
+  padding-top: 52px; /* Chrome61 基线 */
+  padding-top: calc(52px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+  padding-bottom: 28px;
+  text-align: center;
+  pointer-events: none;
+  font-family: "Source Han Sans SC Title", "Noto Sans CJK SC", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-weight: 900;
+  font-size: 35px;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+  color: #111111;
+  -webkit-font-smoothing: antialiased;
+}
+.import-stage.is-pick .import-title { display: none; }
+
 .import-finder {
   position: absolute;
   z-index: 1;
   left: 8px;
   right: 8px;
-  top: 9%;
-  height: 66%;
+  top: 20%;
+  height: 58%;
   border-radius: 28px;
   border: 1.5px dashed rgba(26, 26, 26, 0.18);
   pointer-events: none;
@@ -725,7 +756,7 @@ html.is-note body {
   z-index: 1;
   left: 0;
   right: 0;
-  top: calc(75% + 16px);
+  top: calc(78% + 12px);
   margin: 0;
   text-align: center;
   font-size: 13px;
@@ -791,13 +822,13 @@ html.is-note body {
 #app.is-import .import-cluster {
   position: absolute;
   left: 50%;
-  top: calc(9% + 33%);
+  top: calc(20% + 29%);
   transform: translate(-50%, -50%);
 }
 
 #app.is-import .import-glow,
 #app.is-import .import-ripple {
-  top: calc(9% + 33%);
+  top: calc(20% + 29%);
 }
 
 #app.is-import .pick-stage {
