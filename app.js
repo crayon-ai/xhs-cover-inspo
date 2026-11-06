@@ -180,7 +180,30 @@
     } catch (e) {
       // 读失败：空列表 + all，内存降级
     }
+    // 兼容脏数据：剔除与默认类型重名的 custom（历史 bug 误写入）
+    var removed = false;
+    if (state.customCategories && state.customCategories.length) {
+      var defaults = defaultTypeNames();
+      var kept = state.customCategories.filter(function (c) {
+        if (defaults[normalizeCategoryName(c.name)]) {
+          removed = true;
+          return false;
+        }
+        return true;
+      });
+      if (removed) state.customCategories = kept;
+    }
     syncExtraCategories();
+    if (removed) persistCustomCategories();
+  }
+
+  /** 默认五类 name 集合：library 里出现同名分类时不补录 custom，避免与默认类型重名 */
+  function defaultTypeNames() {
+    var names = {};
+    COVER_TYPES.forEach(function (t) {
+      names[normalizeCategoryName(t.name)] = true;
+    });
+    return names;
   }
 
   function findCustomByName(name) {
@@ -200,7 +223,9 @@
       if (name && !seen[name]) seen[name] = true;
     });
     var added = false;
+    var defaults = defaultTypeNames();
     Object.keys(seen).forEach(function (name) {
+      if (defaults[normalizeCategoryName(name)]) return; // 默认类型名不补录
       rememberCategory(name);
       if (!findCustomByName(name)) {
         state.customCategories.push({ id: 'custom_' + uid(), name: name, createdAt: Date.now() });
@@ -1408,15 +1433,16 @@
 
   function renderLibrary() {
     var isEmpty = !(state.library && state.library.length);
-    if (el.libraryRows) el.libraryRows.hidden = isEmpty;
+    var filtered = !!(state.libFilter && state.libFilter !== 'all');
+    if (el.libraryRows) el.libraryRows.hidden = isEmpty && !filtered;
     if (el.libraryEmpty) {
-      el.libraryEmpty.hidden = !isEmpty;
+      el.libraryEmpty.hidden = !isEmpty || filtered;
       el.libraryEmpty.textContent = '空';
     }
     if (el.btnClearAll) el.btnClearAll.hidden = isEmpty;
     renderLibFilterChips();
-    if (isEmpty) return;
-    if (state.libFilter && state.libFilter !== 'all') {
+    if (isEmpty && !filtered) return;
+    if (filtered) {
       renderLibFilteredRow(state.libFilter);
     } else {
       renderLibraryRows();
