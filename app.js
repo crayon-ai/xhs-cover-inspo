@@ -839,7 +839,7 @@
     return tiles;
   }
 
-  async function sliceFeed(bitmap, idx) {
+  async function sliceFeed(bitmap) {
     var imgW = bitmap.width || bitmap.naturalWidth;
     var imgH = bitmap.height || bitmap.naturalHeight;
     var results = [];
@@ -882,7 +882,7 @@
     if (el.importStage) el.importStage.classList.toggle('is-pick', !!on);
   }
 
-  function paintBlobToCanvas(blob, targetCanvas, idx) {
+  function paintBlobToCanvas(blob, targetCanvas) {
     // 与 fileToBitmap 同策略：优先 CIB，失败降级 Image(blob:)，再降级
     // FileReader → dataURL，避免小工具 WebView 对 canvas.toBlob 的 JPEG
     // 调 CIB reject 时中断预览链路。
@@ -993,7 +993,7 @@
       btn.appendChild(face);
       btn.appendChild(badge);
       rail.appendChild(btn);
-      paintBlobToCanvas(c.blob, canvas, i).catch(function () {});
+      paintBlobToCanvas(c.blob, canvas).catch(function () {});
 
       var originX = 0;
       var moved = false;
@@ -2686,7 +2686,7 @@
     var all = [];
     try {
       for (var i = 0; i < state.pendingBitmaps.length; i++) {
-        var part = await sliceFeed(state.pendingBitmaps[i], i);
+        var part = await sliceFeed(state.pendingBitmaps[i]);
         all = all.concat(part);
       }
     } catch (e) {
