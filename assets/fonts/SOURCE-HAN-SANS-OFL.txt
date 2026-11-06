@@ -1,0 +1,5 @@
+Source Han Sans (思源黑体) — SIL Open Font License 1.1
+Source: Adobe https://github.com/adobe-fonts/source-han-sans
+This directory contains a glyph-subset WOFF2 of SourceHanSansSC-Heavy
+for the title characters 「小红书封面灵感库」 only.
+Full OFL text: https://github.com/adobe-fonts/source-han-sans/blob/release/LICENSE.txt
