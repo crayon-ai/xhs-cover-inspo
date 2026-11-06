@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>封面灵感收集</title>
-  <link rel="stylesheet" href="./styles.css?v=clean20261106a" />
+  <link rel="stylesheet" href="./styles.css?v=life20261106a" />
 </head>
 <body>
   <nav class="tabs" id="tabs" aria-label="主导航" hidden>
@@ -45,6 +45,8 @@
             </span>
           </label>
           <input id="file-input" type="file" accept="image/*" multiple hidden />
+          <!-- 导入状态卡：加载/失败非阻塞反馈（失败含「再试一次」） -->
+          <div id="import-status" class="import-status" hidden></div>
           <button type="button" id="btn-follow-author" class="follow-pill" hidden aria-label="关注作者">关注</button>
           <div id="pick-stage" class="pick-stage is-hidden">
             <div class="pick-rail-wrap">
@@ -173,6 +175,16 @@
     </div>
   </div>
   <div id="app-toast" class="app-toast" hidden aria-live="polite"></div>
+  <!-- 导入生命周期诊断条（预览诊断，非修复承诺） -->
+  <div id="life-diag" class="life-diag" role="status">
+    <span class="life-diag__badge">预览诊断</span>
+    <span id="life-phase" class="life-diag__phase">IDLE</span>
+    <span class="life-diag__btns">
+      <button type="button" id="life-log-toggle" class="life-diag__btn">展开</button>
+      <button type="button" id="life-log-clear" class="life-diag__btn">清空</button>
+    </span>
+  </div>
+  <textarea id="life-log-box" class="life-log-box" readonly hidden aria-label="导入诊断日志"></textarea>
   <div id="ask" class="sheet-confirm ask" hidden>
     <button type="button" id="ask-backdrop" class="sheet-confirm__backdrop" aria-label="取消"></button>
     <div class="sheet-confirm__box" role="dialog" aria-modal="true">
@@ -194,6 +206,6 @@
     </svg>
     已收入灵感库
   </div>
-  <script src="./app.js?v=clean20261106a"></script>
+  <script src="./app.js?v=life20261106a"></script>
 </body>
 </html>

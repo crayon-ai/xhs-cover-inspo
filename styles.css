@@ -2754,3 +2754,78 @@ html.is-note body {
   text-align: center;
   pointer-events: none;
 }
+
+/* ================= 导入生命周期诊断（预览诊断，最小样式，不动业务视觉） ================= */
+.import-status {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%);
+  z-index: 30;
+  max-width: 82%;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(20, 20, 20, 0.86);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.import-status.is-loading { color: rgba(255, 255, 255, 0.92); }
+.import-status.is-fail { background: rgba(80, 20, 20, 0.9); flex-direction: column; gap: 6px; }
+.import-status__retry {
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: transparent;
+  color: #fff;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 13px;
+}
+.life-diag {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 13px;
+  backdrop-filter: blur(2px);
+}
+.life-diag__badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ff2442;
+  font-size: 11px;
+}
+.life-diag__phase { flex: 1 1 auto; font-weight: 700; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.life-diag__btns { flex: none; display: flex; gap: 6px; }
+.life-diag__btn {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: transparent;
+  color: #fff;
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+.life-log-box {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: 32px;
+  z-index: 9998;
+  height: 40vh;
+  font-size: 11px;
+  font-family: monospace;
+  background: rgba(0, 0, 0, 0.85);
+  color: #9fe870;
+  border: none;
+}

@@ -333,61 +333,296 @@
     return Promise.race([p, to]);
   }
 
-  async function fileToBitmap(file) {
+  /* ================= 导入生命周期诊断（预览诊断，非修复承诺） =================
+   * 背景：干净超时版仍偶发「不进 PICK」，ANALYSIS.md 仅证明结构性风险（A2 阈值
+   * 路径分叉 / A1 失败出口 / A6 无导入锁），未证实真机根因。本版做：
+   *   1) runId + 导入锁：禁止并发 change 互相清 state（A6）；
+   *   2) 顺序有界解码（CIB→Image→FileReader）：超时后不再同时等 CIB 又开 Image
+   *      双成功竞争，仅为减少双解码竞态（ANALYSIS A2），非根因证实；
+   *   3) 整次导入总 deadline，防止永久卡死（非调参玄学）；
+   *   4) 失败出口走页面内非阻塞状态卡（避免容器 alert 桥接丢文案）；
+   *   5) ImageBitmap 生命周期：每个 feed bitmap 用完即 close，run 边界兜底 close。
+   * 本版目标是「可验收预览 + 真机抓末态」，绝不声称已修好真机偶发。 */
+  var LIFE = {
+    runId: 0,
+    busy: false,
+    activeBitmaps: [], // 本 run 持有的、需要 close() 的 ImageBitmap
+    phase: 'IDLE',
+    force: {}, // 测试钩：cibHang/cibReject/imgHang/imgError/readerHang/readerFail/toBlobHang/toDataUrlFail
+    timeouts: { cib: 1200, img: 3000, reader: 5000, blob: 2000, total: 45000 },
+    lines: [],
+    memLines: []
+  };
+  var LIFE_T0 = Date.now();
+  var LIFE_LOG_KEY = 'xhs-inspo-life-diag-v1';
+  var LIFE_LOG_MAX = 80;
+
+  function setPhase(p) {
+    LIFE.phase = p;
+    var node = document.getElementById('life-phase');
+    if (node) node.textContent = p;
+  }
+
+  function lifeLog(phase, detail) {
+    var line = (Date.now() - LIFE_T0) + ' ' + phase + (detail ? ' ' + detail : '');
+    LIFE.lines.push(line);
+    if (LIFE.lines.length > LIFE_LOG_MAX) LIFE.lines.splice(0, LIFE.lines.length - LIFE_LOG_MAX);
+    try {
+      sessionStorage.setItem(LIFE_LOG_KEY, LIFE.lines.join('\n'));
+    } catch (e) {
+      // sessionStorage 不可用（隐私模式等）：降级内存
+      LIFE.memLines.push(line);
+      if (LIFE.memLines.length > LIFE_LOG_MAX) LIFE.memLines.shift();
+    }
+    var box = document.getElementById('life-log-box');
+    if (box) box.value = LIFE.lines.join('\n');
+    var node = document.getElementById('life-phase');
+    if (node && phase !== 'VIS') node.setAttribute('data-last', phase);
+    return line;
+  }
+
+  function lifeFlushBox() {
+    var box = document.getElementById('life-log-box');
+    if (box) box.value = LIFE.lines.join('\n');
+  }
+
+  // ---- bitmap 登记/释放：run 边界兜底 close，slice 用完即 close ----
+  function registerBitmap(bmp) {
+    if (bmp && bmp.close && LIFE.activeBitmaps.indexOf(bmp) < 0) LIFE.activeBitmaps.push(bmp);
+  }
+  function releaseBitmap(bmp, why) {
+    var i = LIFE.activeBitmaps.indexOf(bmp);
+    if (i >= 0) LIFE.activeBitmaps.splice(i, 1);
+    if (bmp && bmp.close) {
+      try {
+        bmp.close();
+        lifeLog('BMP_CLOSE', why + ' left=' + LIFE.activeBitmaps.length);
+      } catch (e) {}
+    }
+  }
+  function closeAllBitmaps(why) {
+    var n = LIFE.activeBitmaps.length;
+    for (var i = 0; i < n; i++) {
+      var b = LIFE.activeBitmaps[i];
+      if (b && b.close) { try { b.close(); } catch (e) {} }
+    }
+    if (n) lifeLog('BMP_CLOSE', why + ' x' + n + ' left=0');
+    LIFE.activeBitmaps = [];
+  }
+
+  // ---- 失败/加载状态卡（非阻塞，替代 alert 主路径） ----
+  function showImportLoading(text) {
+    var card = document.getElementById('import-status');
+    if (!card) return;
+    card.hidden = false;
+    card.className = 'import-status is-loading';
+    card.textContent = text || '导入中…';
+  }
+  function showImportFail(text) {
+    var card = document.getElementById('import-status');
+    LIFE.failShown = true;
+    if (!card) { appToast(text); return; }
+    card.hidden = false;
+    card.className = 'import-status is-fail';
+    card.textContent = '';
+    var span = document.createElement('span');
+    span.textContent = text;
+    card.appendChild(span);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'import-retry';
+    btn.className = 'import-status__retry';
+    btn.textContent = '再试一次';
+    btn.addEventListener('click', function () {
+      lifeLog('RETRY', '');
+      hideImportStatus();
+      if (el.fileInput) el.fileInput.click();
+    });
+    card.appendChild(btn);
+  }
+  function hideImportStatus() {
+    LIFE.failShown = false;
+    var card = document.getElementById('import-status');
+    if (card) { card.hidden = true; card.textContent = ''; }
+  }
+  function clearImportFail() { hideImportStatus(); }
+
+  // ---- 测试/诊断钩子（只读日志 + force 注入 + 仅测试可覆盖超时） ----
+  window.__importLife = {
+    getLines: function () { return LIFE.lines.slice(); },
+    getPhase: function () { return LIFE.phase; },
+    getRunId: function () { return LIFE.runId; },
+    isBusy: function () { return LIFE.busy; },
+    setForce: function (o) { LIFE.force = o || {}; },
+    bumpRun: function () { LIFE.runId++; return LIFE.runId; },
+    // 仅测试用：缩短超时让 harness 不真等几十秒；线上默认值见 LIFE.timeouts
+    setTimeouts: function (o) {
+      var k;
+      for (k in o) {
+        if (Object.prototype.hasOwnProperty.call(LIFE.timeouts, k)) LIFE.timeouts[k] = o[k];
+      }
+    }
+  };
+
+  async function fileToBitmap(file, runId) {
     // 优先 createImageBitmap；部分 WebView 对相册 File 会让解码挂起或 reject，
     // 1200ms 超时防止挂起，降级到 Image(blob:)，再不行降级 FileReader → dataURL
     //（App 对 blob: 更严时），避免中断导入链路。
+    runId = runId == null ? LIFE.runId : runId;
+    var force = LIFE.force || {};
+    // 顺序降级：CIB → Image(blob:) → FileReader。超时后先置 cancelled，
+    // sidecar 对 late resolve 只 close 不交给业务；绝不「同时等 CIB 又开 Image
+    // 双成功竞争」（ANALYSIS A2：为减少双解码竞态，非根因证实）。
+    // 第 1 步：createImageBitmap，有界（默认 1200ms，测试可经 __importLife.setTimeouts 覆盖）
     if (typeof createImageBitmap === 'function') {
-      var cancelled = false;
-      var cib = createImageBitmap(file);
-      cib.then(function (bmp) {
-        // 超时降级后晚到的结果：忽略并释放，避免双解码占内存
-        if (cancelled && bmp && bmp.close) {
-          try { bmp.close(); } catch (e) {}
+      var cibCancelled = false;
+      var cibPromise;
+      if (force.cibHang) {
+        cibPromise = new Promise(function () {}); // 模拟挂起
+        lifeLog('CIB', 'run=' + runId + ' force=hang');
+      } else if (force.cibReject) {
+        cibPromise = Promise.reject(new Error('forced'));
+        lifeLog('CIB', 'run=' + runId + ' force=reject');
+      } else {
+        cibPromise = createImageBitmap(file);
+        lifeLog('CIB', 'run=' + runId);
+      }
+      cibPromise.then(function (bmp) {
+        // 超时降级后晚到的结果：只 close、不交给业务
+        if (cibCancelled) {
+          if (bmp && bmp.close) { try { bmp.close(); } catch (e) {} }
+          lifeLog('CIB_LATE', 'run=' + runId + ' closed');
         }
-      }, function () {});
+      }, function () {
+        // late reject 由 race/sidecar 吞掉，避免 unhandledrejection
+      });
       try {
-        return await withTimeout(cib, 1200);
+        var bmp = await withTimeout(cibPromise, LIFE.timeouts.cib);
+        if (runId !== LIFE.runId) {
+          // 迟到结果属于旧 run：close，禁止写入 state
+          if (bmp && bmp.close) { try { bmp.close(); } catch (e) {} }
+          lifeLog('BMP_SKIP', 'stale cib run=' + runId);
+          var err = new Error('stale run');
+          err.name = 'StaleRunError';
+          throw err;
+        }
+        registerBitmap(bmp);
+        lifeLog('CIB_OK', 'run=' + runId);
+        return bmp;
       } catch (e) {
-        cancelled = true;
-        // 降级继续
+        if (e && e.name === 'StaleRunError') throw e;
+        cibCancelled = true; // 先置位，再降级；late CIB 只 close
+        lifeLog(e && e.name === 'TimeoutError' ? 'CIB_TO' : 'CIB_RJ', 'run=' + runId);
       }
     }
+    // 第 2 步：Image(blob:)，3000ms 有界；超时 revokeObjectURL 后走第 3 步
+    if (!force.imgHang && !force.imgError && !force.readerHang && !force.readerFail) {
+      try {
+        return await decodeViaBlobImage(file, runId);
+      } catch (e) {
+        if (e && e.name === 'StaleRunError') throw e;
+        lifeLog('IMG_FALL', 'run=' + runId + ' →FR');
+      }
+    } else {
+      lifeLog('IMG', 'run=' + runId + ' force=skip');
+    }
+    // 第 3 步：FileReader → dataURL → Image，整体 5000ms 有界
+    return await decodeViaFileReader(file, runId);
+  }
+
+  function decodeViaBlobImage(file, runId) {
     return new Promise(function (resolve, reject) {
+      var finished = false;
       var url = URL.createObjectURL(file);
       var img = new Image();
+      var to = setTimeout(function () {
+        if (finished) return;
+        finished = true;
+        try { URL.revokeObjectURL(url); } catch (e) {}
+        lifeLog('IMG_TO', 'run=' + runId);
+        reject(new Error('image timeout'));
+      }, LIFE.timeouts.img);
       img.onload = function () {
+        if (finished) return;
+        finished = true;
+        clearTimeout(to);
         URL.revokeObjectURL(url);
+        if (runId !== LIFE.runId) {
+          lifeLog('BMP_SKIP', 'stale img run=' + runId);
+          var err = new Error('stale run');
+          err.name = 'StaleRunError';
+          reject(err);
+          return;
+        }
+        lifeLog('IMG_OK', 'run=' + runId);
         resolve(img);
       };
       img.onerror = function () {
+        if (finished) return;
+        finished = true;
+        clearTimeout(to);
         URL.revokeObjectURL(url);
-        // 再试 FileReader → dataURL（App 对 blob: 更严时）
-        var reader = new FileReader();
-        reader.onload = function () {
-          var img2 = new Image();
-          img2.onload = function () {
-            resolve(img2);
-          };
-          img2.onerror = function () {
-            reject(new Error('图片加载失败'));
-          };
-          img2.src = reader.result;
-        };
-        reader.onerror = function () {
-          reject(new Error('图片加载失败'));
-        };
-        reader.readAsDataURL(file);
+        lifeLog('IMG_ERR', 'run=' + runId);
+        reject(new Error('image error'));
       };
       img.src = url;
     });
   }
 
-  // 出图：toBlob 挂起时 2000ms 超时防止 WebView 挂起 → toDataURL 同步兜底；
-  // 晚到的 toBlob 回调忽略。
-  function canvasToBlob(canvas, type, quality) {
+  function decodeViaFileReader(file, runId) {
+    return new Promise(function (resolve, reject) {
+      var force = LIFE.force || {};
+      var finished = false;
+      var fail = function (msg) {
+        if (finished) return;
+        finished = true;
+        clearTimeout(to);
+        lifeLog('FR_FAIL', 'run=' + runId + ' ' + msg);
+        reject(new Error(msg));
+      };
+      var to = setTimeout(function () {
+        fail('reader timeout');
+      }, LIFE.timeouts.reader);
+      lifeLog('FR', 'run=' + runId);
+      var reader = new FileReader();
+      reader.onload = function () {
+        if (finished) return;
+        var img2 = new Image();
+        img2.onload = function () {
+          if (finished) return;
+          finished = true;
+          clearTimeout(to);
+          if (runId !== LIFE.runId) {
+            lifeLog('BMP_SKIP', 'stale fr run=' + runId);
+            var err = new Error('stale run');
+            err.name = 'StaleRunError';
+            reject(err);
+            return;
+          }
+          lifeLog('FR_OK', 'run=' + runId);
+          resolve(img2);
+        };
+        img2.onerror = function () { fail('dataurl image error'); };
+        img2.src = reader.result;
+      };
+      reader.onerror = function () { fail('reader error'); };
+      if (force.readerHang) {
+        lifeLog('FR', 'run=' + runId + ' force=hang');
+        // 不调用 readAsDataURL，模拟挂起，等 5000ms 超时
+      } else if (force.readerFail) {
+        setTimeout(function () { fail('forced reader fail'); }, 0);
+      } else {
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  // 出图：toBlob 挂起时超时（默认 2000ms）防止 WebView 挂起 → toDataURL 同步兜底；
+  // 晚到的 toBlob 回调忽略。tag 仅用于诊断日志。
+  function canvasToBlob(canvas, type, quality, tag) {
     var t = type || 'image/jpeg';
     var q = quality == null ? 0.92 : quality;
+    var force = LIFE.force || {};
     return new Promise(function (resolve) {
       var done = false;
       function finish(b) {
@@ -396,25 +631,30 @@
         resolve(b || null);
       }
       function viaDataURL() {
+        lifeLog('BLOB_TO', tag || '');
         try {
+          if (force.toDataUrlFail) throw new Error('forced toDataURL fail');
           var data = canvas.toDataURL(t, q);
           var bin = atob(data.split(',')[1] || '');
           var arr = new Uint8Array(bin.length);
           for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
           finish(new Blob([arr], { type: t }));
         } catch (e) {
+          lifeLog('BLOB_NULL', tag || '');
           finish(null);
         }
       }
-      if (!canvas.toBlob) {
-        viaDataURL();
+      if (!canvas.toBlob || force.toBlobHang) {
+        if (force.toBlobHang) lifeLog('BLOB', (tag || '') + ' force=hang');
+        setTimeout(viaDataURL, LIFE.timeouts.blob);
         return;
       }
-      var timer = setTimeout(viaDataURL, 2000);
+      var timer = setTimeout(viaDataURL, LIFE.timeouts.blob);
       try {
         canvas.toBlob(function (b) {
           clearTimeout(timer);
           if (done) return; // dataURL 已兜底，晚到回调忽略
+          lifeLog('BLOB_OK', tag || '');
           finish(b);
         }, t, q);
       } catch (e) {
@@ -839,13 +1079,20 @@
     return tiles;
   }
 
-  async function sliceFeed(bitmap) {
+  async function sliceFeed(bitmap, runId) {
+    runId = runId == null ? LIFE.runId : runId;
     var imgW = bitmap.width || bitmap.naturalWidth;
     var imgH = bitmap.height || bitmap.naturalHeight;
     var results = [];
-    if (!imgW || !imgH) return results;
+    if (!imgW || !imgH) {
+      releaseBitmap(bitmap, 'slice-empty');
+      return results;
+    }
+    lifeLog('SLICE', 'run=' + runId + ' ' + imgW + 'x' + imgH);
     var data = buildPixelData(bitmap, imgW, imgH);
+    lifeLog('PIX', 'run=' + runId);
     var tiles = detectGridCovers(data, imgW, imgH);
+    lifeLog('DET', 'run=' + runId + ' tiles=' + tiles.length);
     for (var t = 0; t < tiles.length; t++) {
       var tile = tiles[t];
       var h = tile.y1 - tile.y0 + 1;
@@ -854,7 +1101,8 @@
       canvas.height = h;
       var ctx = canvas.getContext('2d');
       ctx.drawImage(bitmap, tile.x, tile.y0, tile.w, h, 0, 0, tile.w, h);
-      var blob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
+      lifeLog('TILE', 'run=' + runId + ' ' + t + '/' + tiles.length);
+      var blob = await canvasToBlob(canvas, 'image/jpeg', 0.9, 'run=' + runId + ' t' + t);
       if (blob) {
         results.push({
           id: uid(),
@@ -873,6 +1121,8 @@
       if (a.row !== b.row) return a.row - b.row;
       return a.col - b.col;
     });
+    // 本 bitmap 已切完：用完即 close，从本 run 持有列表移除
+    releaseBitmap(bitmap, 'slice-done');
     return results;
   }
 
@@ -893,7 +1143,10 @@
       targetCanvas.height = h;
       var ctx = targetCanvas.getContext('2d');
       ctx.drawImage(bmpOrImg, 0, 0);
-      if (bmpOrImg.close) bmpOrImg.close();
+      releaseBitmap(bmpOrImg, 'paint-done');
+    }, function (e) {
+      // 失败路径：fileToBitmap 内部已 close 迟到的 CIB/降级产物，这里只透传
+      throw e;
     });
   }
 
@@ -2640,31 +2893,106 @@
   }
 
 
+  // 导入总入口（含锁 + runId + 总 deadline）。失败/成功都保证清 busy，
+  // 绝不永久卡 loading。
   async function onFilesChosen(fileList) {
+    // 导入锁：busy 时非阻塞提示并忽略本次 change，绝不并发双开（ANALYSIS A6）
+    if (LIFE.busy) {
+      lifeLog('BUSY', 'ignored run=' + LIFE.runId);
+      appToast('正在导入，请稍候');
+      return;
+    }
+    LIFE.busy = true;
+    LIFE.runId++;
+    var runId = LIFE.runId;
+    setPhase('RUN' + runId + ' · CHG');
+    closeAllBitmaps('NEW_RUN'); // 清上一 run 残留
+    clearImportFail();
     var files = Array.prototype.slice.call(fileList || []).filter(isImageFile);
     if (!files.length) {
-      safeAlert('请选择图片文件');
+      lifeLog('EMPTY', 'run=' + runId + ' no-image-file');
+      setPhase('RUN' + runId + ' · FAIL');
+      showImportFail('请选择图片文件');
+      LIFE.busy = false;
       return;
     }
-    state.pendingFiles = files;
-    state.pendingBitmaps = [];
-    // 单张读取失败静默跳过，绝不在这里 alert：
-    // 该路径仍可能 slicePending 成功出结果（如 1/4），而小工具容器对
-    // 异步续体里的原生 alert 有「文案丢失→空白框+红色确定」的桥接缺陷，
-    // 这正是线上空白弹窗的来源。
-    for (var i = 0; i < files.length; i++) {
-      try {
-        var bmp = await fileToBitmap(files[i]);
-        state.pendingBitmaps.push(bmp);
-      } catch (e) {
-        // 静默跳过无法读取的文件
+    lifeLog('CHG', 'run=' + runId + ' f=' + files.length);
+    showImportLoading('导入中…');
+    var t0 = Date.now();
+    try {
+      await Promise.race([
+        importWork(files, runId),
+        new Promise(function (_resolve, reject) {
+          setTimeout(function () {
+            var err = new Error('import total timeout');
+            err.name = 'TotalTimeoutError';
+            reject(err);
+          }, LIFE.timeouts.total);
+        })
+      ]);
+    } catch (e) {
+      // 统一失败出口：页面内非阻塞状态卡 + 再试按钮，不依赖 alert 主路径
+      if (e && e.name === 'TotalTimeoutError') {
+        lifeLog('FAIL', 'run=' + runId + ' total-timeout');
+        // 总超时：作废本 run（后台残留回调按 stale 丢弃），清理资源
+        closeAllBitmaps('TOTAL_TO');
+        LIFE.runId++;
+        setPhase('RUN' + runId + ' · FAIL');
+        showImportFail('导入超时，请重试');
+        showPick(false);
+      } else {
+        lifeLog('FAIL', 'run=' + runId + ' ' + (e && e.message ? e.message : 'unknown'));
+        setPhase('RUN' + runId + ' · FAIL');
+        showImportFail('导入异常，请重试');
+        showPick(false);
+      }
+    } finally {
+      // 若期间用户已开新 run（理论上锁下不可能），不动新 run 的资源
+      if (LIFE.runId === runId) {
+        closeAllBitmaps('FINALLY');
+        // 失败卡保留给用户看（含「再试一次」），只清 loading
+        if (!LIFE.failShown) hideImportStatus();
+        LIFE.busy = false;
+        lifeLog('DONE', 'run=' + runId + ' ms=' + (Date.now() - t0));
+        lifeFlushBox();
+      } else {
+        LIFE.busy = false;
       }
     }
-    if (!state.pendingBitmaps.length) {
-      safeAlert('图片读取失败，请换一张截图试试');
+  }
+
+  async function importWork(files, runId) {
+    state.pendingFiles = files;
+    state.pendingBitmaps = [];
+    // 单张读取失败静默跳过：该路径仍可能 slicePending 成功出结果（如 1/4）
+    for (var i = 0; i < files.length; i++) {
+      try {
+        var bmp = await fileToBitmap(files[i], runId);
+        if (runId !== LIFE.runId) {
+          // 旧 run 迟到结果：close，禁止写入 state、禁止 showPick
+          releaseBitmap(bmp, 'stale-run');
+          lifeLog('BMP_SKIP', 'run=' + runId + ' stale drop');
+          continue;
+        }
+        state.pendingBitmaps.push(bmp);
+        lifeLog('BMP_OK', 'run=' + runId + ' f#' + i + ' left=' + LIFE.activeBitmaps.length);
+      } catch (e) {
+        if (e && e.name === 'StaleRunError') throw e;
+        lifeLog('READ_FAIL', 'run=' + runId + ' f#' + i);
+      }
+    }
+    if (runId !== LIFE.runId) {
+      lifeLog('BMP_SKIP', 'run=' + runId + ' stale slice skip');
       return;
     }
-    await slicePending();
+    if (!state.pendingBitmaps.length) {
+      lifeLog('EMPTY', 'run=' + runId + ' decode-all-failed');
+      setPhase('RUN' + runId + ' · FAIL');
+      showImportFail('图片读取失败，请换一张截图试试');
+      showPick(false);
+      return;
+    }
+    await slicePending(runId);
   }
 
   function resetPick() {
@@ -2672,38 +3000,54 @@
     state.pendingBitmaps = [];
     state.candidates = [];
     state.selectedIds = {};
+    closeAllBitmaps('RESET');
     if (el.fileInput) el.fileInput.value = '';
     if (el.pickRail) el.pickRail.innerHTML = '';
     updateSaveSelectedBtn();
     showPick(false);
   }
 
-  async function slicePending() {
+  async function slicePending(runId) {
+    runId = runId == null ? LIFE.runId : runId;
     if (!state.pendingBitmaps.length) {
       showPick(false);
       return;
     }
+    setPhase('RUN' + runId + ' · SLICE');
     var all = [];
     try {
       for (var i = 0; i < state.pendingBitmaps.length; i++) {
-        var part = await sliceFeed(state.pendingBitmaps[i]);
+        var part = await sliceFeed(state.pendingBitmaps[i], runId);
         all = all.concat(part);
       }
     } catch (e) {
-      // 固定中文前缀，不把可能为空的 e.message 单独 alert
-      safeAlert('切分失败：' + (e && e.message ? e.message : '未知错误'));
+      closeAllBitmaps('SLICE_FAIL');
+      lifeLog('FAIL', 'run=' + runId + ' slice ' + (e && e.message ? e.message : 'unknown'));
+      setPhase('RUN' + runId + ' · FAIL');
+      // 固定中文前缀，不把可能为空的 e.message 单独弹窗
+      showImportFail('切分失败：' + (e && e.message ? e.message : '未知错误'));
       showPick(false);
+      return;
+    }
+    if (runId !== LIFE.runId) {
+      // 旧 run 切出的结果丢弃，不写 state、不进 PICK
+      lifeLog('BMP_SKIP', 'run=' + runId + ' stale result drop');
       return;
     }
     state.candidates = all;
     state.selectedIds = {};
     if (!all.length) {
-      safeAlert('没有切出可用封面，请换一张更接近双列信息流的整屏截图试试');
+      lifeLog('EMPTY', 'run=' + runId + ' 0-tile');
+      setPhase('RUN' + runId + ' · FAIL');
+      showImportFail('没有切出可用封面，请换一张更接近双列信息流的整屏截图试试');
       showPick(false);
       if (el.pickRail) el.pickRail.innerHTML = '';
       return;
     }
+    lifeLog('PICK', 'run=' + runId + ' tiles=' + all.length);
+    setPhase('RUN' + runId + ' · PICK');
     showView('import');
+    clearImportFail();
     showPick(true);
     renderCandidates();
   }
@@ -3143,9 +3487,37 @@
     });
 
     el.fileInput.addEventListener('change', function () {
-      onFilesChosen(el.fileInput.files).catch(function () {});
-
+      onFilesChosen(el.fileInput.files).catch(function (e) {
+        lifeLog('UNCAUGHT', (e && e.message ? e.message : 'unknown'));
+        showImportFail('导入异常，请重试');
+      });
     });
+
+    // 可见性仅记录：可见恢复绝不自动标成功/DONE/PICK
+    document.addEventListener('visibilitychange', function () {
+      lifeLog('VIS', document.visibilityState === 'hidden' ? 'hidden' : 'visible');
+    });
+
+    // 诊断条：展开/收起 + 清空（不使用系统剪贴板）
+    var lifeExpand = document.getElementById('life-log-toggle');
+    var lifeClear = document.getElementById('life-log-clear');
+    var lifeBox = document.getElementById('life-log-box');
+    if (lifeExpand && lifeBox) {
+      lifeExpand.addEventListener('click', function () {
+        var open = lifeBox.hidden;
+        lifeBox.hidden = !open;
+        lifeExpand.textContent = open ? '收起' : '展开';
+        if (open) lifeFlushBox();
+      });
+    }
+    if (lifeClear) {
+      lifeClear.addEventListener('click', function () {
+        LIFE.lines = [];
+        LIFE.memLines = [];
+        try { sessionStorage.removeItem(LIFE_LOG_KEY); } catch (e) {}
+        lifeFlushBox();
+      });
+    }
 
     el.btnNote.addEventListener('click', function () {
       startNoteFlow();
@@ -3456,6 +3828,12 @@
 
   function init() {
     bind();
+    // 恢复上次会话的诊断日志（最多 80 行；失败降级内存已在 lifeLog 内处理）
+    try {
+      var prev = sessionStorage.getItem(LIFE_LOG_KEY);
+      if (prev) LIFE.lines = prev.split('\n').slice(-LIFE_LOG_MAX);
+    } catch (e) {}
+    lifeFlushBox();
     bindChromeMotion();
     setupFollowAuthor();
     loadCustomCategories();
