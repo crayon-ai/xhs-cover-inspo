@@ -284,10 +284,232 @@
   // 兜底弹窗：msg 转字符串并 trim，空则直接 return，绝不 alert('')/alert(undefined)。
   // 背景：小工具容器对异步续体（await 之后）里调用的原生 alert 存在桥接缺陷，
   // 文案可能丢失 → 弹出「空白系统框 + 红色确定」；这里至少保证不传空文案。
+  // ==================== 真机导入诊断（本分支专用） ====================
+  // 默认开启；?diag=0 关闭，?diag=1 强制开。
+  // 注意：CIB/toBlob 超时降级是「候选假设验证用」（见 FINDINGS.md P0/P0b），
+  // 不代表已确认根因；模拟器不能证明真机根因。
+  var DIAG_ON = true;
+  try {
+    var __diagQ = new URLSearchParams(window.location.search || '');
+    if (__diagQ.get('diag') === '0') DIAG_ON = false;
+    if (__diagQ.get('diag') === '1') DIAG_ON = true;
+  } catch (e) {}
+
+  // force 钩子：回归/真机复现用（cibHang / cibReject / imageError / readerFail）
+  var diagForce = { cibHang: false, cibReject: false, imageError: false, readerFail: false };
+
+  var diagLines = [];
+  var diagPhase = 'BOOT';
+  var diagT0 = 0;
+  var diagImporting = false;
+  var diagLastBeat = 0;
+  var diagStallTimer = 0;
+  var diagLastStall = 0;
+
+  // 日志卫生：压空白、截 80 字；调用侧禁止传文件名原文/base64/像素
+  function diagSanitize(s) {
+    s = String(s == null ? '' : s).replace(/\s+/g, ' ');
+    return s.length > 80 ? s.slice(0, 77) + '…' : s;
+  }
+
+  function diagRel() {
+    return diagT0 ? (Date.now() - diagT0) : 0;
+  }
+
+  function diagSetPhaseDisplay(text) {
+    var node = document.getElementById('import-diag-phase');
+    if (node) node.textContent = text;
+  }
+
+  function diagSetPhase(p) {
+    diagPhase = p;
+    diagSetPhaseDisplay(p);
+  }
+
+  function diagPersist() {
+    try {
+      window.sessionStorage.setItem('import-diag-log', diagLines.join('\n'));
+    } catch (e) {
+      // sessionStorage 不可用（如隐私模式）：仅内存备份
+    }
+  }
+
+  function diagRenderTa() {
+    var ta = document.getElementById('import-diag-ta');
+    if (ta) {
+      ta.value = diagLines.join('\n');
+      ta.scrollTop = ta.scrollHeight;
+    }
+  }
+
+  function diagEnsureUi() {
+    if (!DIAG_ON || document.getElementById('import-diag')) return;
+    var box = document.createElement('div');
+    box.id = 'import-diag';
+    box.className = 'diag-panel';
+    var head = document.createElement('div');
+    head.className = 'diag-head';
+    var badge = document.createElement('span');
+    badge.className = 'diag-badge';
+    badge.textContent = '诊断预览 · 非正式';
+    var phase = document.createElement('strong');
+    phase.id = 'import-diag-phase';
+    phase.className = 'diag-phase';
+    phase.textContent = diagPhase;
+    var btns = document.createElement('span');
+    btns.className = 'diag-btns';
+    var toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.id = 'import-diag-toggle';
+    toggle.className = 'diag-btn';
+    toggle.textContent = '收起';
+    var clear = document.createElement('button');
+    clear.type = 'button';
+    clear.id = 'import-diag-clear';
+    clear.className = 'diag-btn';
+    clear.textContent = '清空';
+    btns.appendChild(toggle);
+    btns.appendChild(clear);
+    head.appendChild(badge);
+    head.appendChild(phase);
+    head.appendChild(btns);
+    var ta = document.createElement('textarea');
+    ta.id = 'import-diag-ta';
+    ta.className = 'diag-ta';
+    ta.readOnly = true;
+    ta.rows = 7;
+    var tip = document.createElement('div');
+    tip.className = 'diag-tip';
+    tip.textContent = '长按日志全选后系统分享；无复制按钮';
+    box.appendChild(head);
+    box.appendChild(ta);
+    box.appendChild(tip);
+    document.body.appendChild(box);
+
+    var openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.id = 'diag-open-btn';
+    openBtn.className = 'diag-open-btn';
+    openBtn.textContent = '诊断记录';
+    var importView = document.getElementById('view-import');
+    if (importView) importView.appendChild(openBtn);
+
+    toggle.addEventListener('click', function () {
+      var collapsed = box.classList.toggle('is-collapsed');
+      toggle.textContent = collapsed ? '展开' : '收起';
+    });
+    clear.addEventListener('click', function () {
+      diagLines = [];
+      diagPersist();
+      diagRenderTa();
+    });
+    openBtn.addEventListener('click', function () {
+      if (box.classList.contains('is-collapsed')) {
+        box.classList.remove('is-collapsed');
+        toggle.textContent = '收起';
+      }
+      box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    diagRenderTa();
+  }
+
+  function diag(code, detail) {
+    if (!DIAG_ON) return;
+    diagEnsureUi();
+    diagLastBeat = Date.now();
+    diagSetPhase(code);
+    var msg = diagRel() + 'ms ' + code + (detail ? ' ' + diagSanitize(detail) : '');
+    diagLines.push(msg);
+    if (diagLines.length > 80) diagLines = diagLines.slice(-80);
+    diagRenderTa();
+    diagPersist();
+  }
+
+  // race 一层保护：超时以 TimeoutError reject；原 promise 若晚到，race 已定型不会双消费
+  function diagWithTimeout(promise, ms, label) {
+    var settled = false;
+    var p = Promise.resolve(promise).then(
+      function (v) { settled = true; return v; },
+      function (e) { settled = true; throw e; }
+    );
+    var to = new Promise(function (_resolve, reject) {
+      setTimeout(function () {
+        if (!settled) {
+          var err = new Error('timeout:' + label);
+          err.name = 'TimeoutError';
+          reject(err);
+        }
+      }, ms);
+    });
+    return Promise.race([p, to]);
+  }
+
+  function diagStartStallWatch() {
+    diagStopStallWatch();
+    diagStallTimer = setInterval(function () {
+      if (!diagImporting) return;
+      var nowTs = Date.now();
+      if (nowTs - diagLastBeat > 3000 && nowTs - diagLastStall > 3000) {
+        diagLastStall = nowTs;
+        diag('STALL', '@' + diagPhase);
+        diagSetPhaseDisplay('STALL@' + diagPhase);
+      }
+    }, 500);
+  }
+
+  function diagStopStallWatch() {
+    if (diagStallTimer) clearInterval(diagStallTimer);
+    diagStallTimer = 0;
+  }
+
+  // 回归 / 真机诊断入口：window.__importDiag
+  window.__importDiag = {
+    enabled: function () { return DIAG_ON; },
+    diag: diag,
+    setPhase: diagSetPhase,
+    getLines: function () { return diagLines.slice(); },
+    getPhase: function () { return diagPhase; },
+    setForce: function (k, v) {
+      if (k in diagForce) diagForce[k] = !!v;
+      return {
+        cibHang: diagForce.cibHang,
+        cibReject: diagForce.cibReject,
+        imageError: diagForce.imageError,
+        readerFail: diagForce.readerFail
+      };
+    },
+    withTimeout: diagWithTimeout,
+    beginImport: function () {
+      diagT0 = Date.now();
+      diagImporting = true;
+      diagLastBeat = diagT0;
+      diagLastStall = 0;
+      diagEnsureUi();
+      diag('CHG');
+      diagStartStallWatch();
+    },
+    endImport: function () {
+      diag('DONE');
+      diagImporting = false;
+      diagStopStallWatch();
+    },
+    boot: function () {
+      // 尝试从 sessionStorage 恢复上次日志（冷杀重开仍可见），失败则仅内存
+      try {
+        var prev = window.sessionStorage.getItem('import-diag-log');
+        if (prev) diagLines = String(prev).split('\n').slice(-80);
+      } catch (e) {}
+      diagEnsureUi();
+      diag('BOOT');
+    }
+  };
+
   function safeAlert(msg) {
     var s = String(msg == null ? '' : msg).trim();
     if (!s) return;
+    if (DIAG_ON) diag('ALERT', 'pre len=' + s.length + ' ' + s.slice(0, 12));
     alert(s);
+    if (DIAG_ON) diag('ALERT', 'post');
   }
 
   // 极简轻提示（.app-toast）：替代 alert 做非阻塞反馈
@@ -313,7 +535,13 @@
     return /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/.test(name);
   }
 
-  async function fileToBitmap(file) {
+  async function fileToBitmap(file, idx) {
+    if (!DIAG_ON) return fileToBitmapBase(file);
+    return diagFileToBitmap(file, idx == null ? '-' : idx);
+  }
+
+  // 原始行为（?diag=0 时保持与 master 一致）
+  async function fileToBitmapBase(file) {
     // 优先 createImageBitmap；小工具 WebView 上部分相册 File 会让 CIB reject，
     // 失败不抛出，降级到 Image(blob:)，再不行降级 FileReader → dataURL
     //（App 对 blob: 更严时），避免中断导入链路。
@@ -354,7 +582,98 @@
     });
   }
 
-  function canvasToBlob(canvas, type, quality) {
+  // 诊断版解码：CIB 1200ms 超时（候选假设 P0 验证用，非确认根因）→ 记 CIB_TO
+  // → 降级 Image(blob)；Image 失败 → FileReader dataURL。超时后 race 已定型，
+  // 晚到的 CIB 结果被忽略（cancelled 标志仅用于主动 close 释放位图）。
+  function diagFileToBitmap(file, idx) {
+    var sizeKB = file && file.size != null ? Math.round(file.size / 1024) : -1;
+    diag('FTB0', 'f#' + idx + ' ' + sizeKB + 'KB');
+    var cancelled = false;
+
+    function frPath() {
+      diag('FR', 'f#' + idx);
+      return new Promise(function (resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function () {
+          if (diagForce.readerFail) {
+            diag('FR_ERR', 'f#' + idx + ' force');
+            reject(new Error('图片加载失败'));
+            return;
+          }
+          var img2 = new Image();
+          img2.onload = function () {
+            diag('FR_OK', 'f#' + idx + ' ' + img2.naturalWidth + 'x' + img2.naturalHeight);
+            resolve(img2);
+          };
+          img2.onerror = function () {
+            diag('IMG_ERR', 'f#' + idx);
+            reject(new Error('图片加载失败'));
+          };
+          img2.src = reader.result;
+        };
+        reader.onerror = function () {
+          diag('FR_ERR', 'f#' + idx);
+          reject(new Error('图片加载失败'));
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function imagePath() {
+      diag('IMG', 'f#' + idx);
+      if (diagForce.imageError) {
+        diag('IMG_ERR', 'f#' + idx + ' force');
+        return frPath();
+      }
+      return new Promise(function (resolve, reject) {
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function () {
+          URL.revokeObjectURL(url);
+          diag('IMG_OK', 'f#' + idx + ' ' + (img.naturalWidth || img.width) + 'x' + (img.naturalHeight || img.height));
+          resolve(img);
+        };
+        img.onerror = function () {
+          URL.revokeObjectURL(url);
+          diag('IMG_ERR', 'f#' + idx);
+          frPath().then(resolve, reject);
+        };
+        img.src = url;
+      });
+    }
+
+    if (typeof createImageBitmap !== 'function') return imagePath();
+    diag('CIB', 'f#' + idx);
+    var cibPromise;
+    if (diagForce.cibHang) {
+      cibPromise = new Promise(function () {}); // 永不 settle，验证 P0 挂起
+    } else if (diagForce.cibReject) {
+      cibPromise = Promise.reject(new Error('force'));
+    } else {
+      cibPromise = createImageBitmap(file);
+    }
+    cibPromise.then(function (bmp) {
+      // 超时后才 resolve 的晚到结果：忽略并释放，避免双解码占内存
+      if (cancelled && bmp && bmp.close) {
+        try { bmp.close(); } catch (e) {}
+      }
+    }, function () {});
+    return diagWithTimeout(cibPromise, 1200, 'CIB#' + idx).then(
+      function (bmp) {
+        diag('CIB_OK', 'f#' + idx + ' ' + bmp.width + 'x' + bmp.height);
+        return bmp;
+      },
+      function (err) {
+        var isTo = err && err.name === 'TimeoutError';
+        diag(isTo ? 'CIB_TO' : 'CIB_RJ', 'f#' + idx);
+        cancelled = true;
+        return imagePath();
+      }
+    );
+  }
+
+  // 原始行为（?diag=0 时保持与 master 一致）
+  function canvasToBlobBase(canvas, type, quality) {
     return new Promise(function (resolve) {
       if (canvas.toBlob) {
         canvas.toBlob(function (b) {
@@ -370,6 +689,57 @@
         } catch (e) {
           resolve(null);
         }
+      }
+    });
+  }
+
+  function canvasToBlob(canvas, type, quality, tag) {
+    if (!DIAG_ON) return canvasToBlobBase(canvas, type, quality);
+    return diagCanvasToBlob(canvas, type, quality, tag || '');
+  }
+
+  // 诊断版出图：toBlob 2000ms 超时（候选假设 P0b 验证用，非确认根因）→
+  // 记 BLOB_TO → toDataURL 同步兜底转 Blob；晚到的 toBlob 回调忽略。
+  function diagCanvasToBlob(canvas, type, quality, tag) {
+    var t = type || 'image/jpeg';
+    var q = quality == null ? 0.92 : quality;
+    return new Promise(function (resolve) {
+      var done = false;
+      function finish(b, how) {
+        if (done) return;
+        done = true;
+        if (b) diag('BLOB_OK', tag + ' ' + how + ' ' + Math.round(b.size / 1024) + 'KB');
+        else diag('BLOB_NULL', tag + ' ' + how);
+        resolve(b || null);
+      }
+      function viaDataURL() {
+        try {
+          var data = canvas.toDataURL(t, q);
+          var bin = atob(data.split(',')[1] || '');
+          var arr = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+          finish(new Blob([arr], { type: t }), 'dataURL');
+        } catch (e) {
+          finish(null, 'dataURL-err');
+        }
+      }
+      if (!canvas.toBlob) {
+        viaDataURL();
+        return;
+      }
+      var timer = setTimeout(function () {
+        diag('BLOB_TO', tag + ' >2000ms');
+        viaDataURL();
+      }, 2000);
+      try {
+        canvas.toBlob(function (b) {
+          clearTimeout(timer);
+          if (done) return; // dataURL 已兜底，晚到回调忽略
+          finish(b, 'toBlob');
+        }, t, q);
+      } catch (e) {
+        clearTimeout(timer);
+        viaDataURL();
       }
     });
   }
@@ -789,22 +1159,28 @@
     return tiles;
   }
 
-  async function sliceFeed(bitmap) {
+  async function sliceFeed(bitmap, idx) {
+    var fTag = 'f#' + (idx == null ? '-' : idx);
     var imgW = bitmap.width || bitmap.naturalWidth;
     var imgH = bitmap.height || bitmap.naturalHeight;
     var results = [];
     if (!imgW || !imgH) return results;
+    var pixTs = Date.now();
     var data = buildPixelData(bitmap, imgW, imgH);
+    if (DIAG_ON) diag('PIX', fTag + ' ' + imgW + 'x' + imgH + ' ' + (Date.now() - pixTs) + 'ms');
     var tiles = detectGridCovers(data, imgW, imgH);
+    if (DIAG_ON) diag('DET', fTag + ' tiles=' + tiles.length);
     for (var t = 0; t < tiles.length; t++) {
       var tile = tiles[t];
       var h = tile.y1 - tile.y0 + 1;
+      var kTag = fTag + 'k' + t + ' ' + tile.w + 'x' + h;
+      if (DIAG_ON) diag('TILE', kTag);
       var canvas = document.createElement('canvas');
       canvas.width = tile.w;
       canvas.height = h;
       var ctx = canvas.getContext('2d');
       ctx.drawImage(bitmap, tile.x, tile.y0, tile.w, h, 0, 0, tile.w, h);
-      var blob = await canvasToBlob(canvas, 'image/jpeg', 0.9);
+      var blob = await canvasToBlob(canvas, 'image/jpeg', 0.9, kTag);
       if (blob) {
         results.push({
           id: uid(),
@@ -827,16 +1203,17 @@
   }
 
   function showPick(on) {
+    if (DIAG_ON) diag('PICK', on ? 'on' : 'off');
     if (el.importHit) el.importHit.classList.toggle('is-hidden', !!on);
     if (el.pickStage) el.pickStage.classList.toggle('is-hidden', !on);
     if (el.importStage) el.importStage.classList.toggle('is-pick', !!on);
   }
 
-  function paintBlobToCanvas(blob, targetCanvas) {
+  function paintBlobToCanvas(blob, targetCanvas, idx) {
     // 与 fileToBitmap 同策略：优先 CIB，失败降级 Image(blob:)，再降级
     // FileReader → dataURL，避免小工具 WebView 对 canvas.toBlob 的 JPEG
     // 调 CIB reject 时中断预览链路。
-    return fileToBitmap(blob).then(function (bmpOrImg) {
+    return fileToBitmap(blob, idx == null ? 'r' : idx).then(function (bmpOrImg) {
       var w = bmpOrImg.width || bmpOrImg.naturalWidth;
       var h = bmpOrImg.height || bmpOrImg.naturalHeight;
       targetCanvas.width = w;
@@ -917,6 +1294,7 @@
     if (!rail) return;
     rail.innerHTML = '';
     var n = state.candidates.length;
+    if (DIAG_ON) diag('RENDER', 'n=' + n);
     rail.classList.toggle('is-empty', !n);
     updateSaveSelectedBtn();
 
@@ -943,7 +1321,7 @@
       btn.appendChild(face);
       btn.appendChild(badge);
       rail.appendChild(btn);
-      paintBlobToCanvas(c.blob, canvas).catch(function () {});
+      paintBlobToCanvas(c.blob, canvas, i).catch(function () {});
 
       var originX = 0;
       var moved = false;
@@ -2592,16 +2970,51 @@
 
   async function onFilesChosen(fileList) {
     var files = Array.prototype.slice.call(fileList || []).filter(isImageFile);
+    if (!DIAG_ON) return onFilesChosenBase(fileList);
+    window.__importDiag.beginImport();
+    try {
+      if (!files.length) {
+        safeAlert('请选择图片文件');
+        return;
+      }
+      diag('FILT', 'n=' + files.length);
+      state.pendingFiles = files;
+      state.pendingBitmaps = [];
+      // 单张读取失败静默跳过，绝不在这里 alert：
+      // 该路径仍可能 slicePending 成功出结果（如 1/4），而小工具容器对
+      // 异步续体里的原生 alert 有「文案丢失→空白框+红色确定」的桥接缺陷，
+      // 这正是线上空白弹窗的来源。
+      for (var i = 0; i < files.length; i++) {
+        try {
+          var bmp = await fileToBitmap(files[i], i);
+          state.pendingBitmaps.push(bmp);
+          diag('BMP_OK', 'f#' + i);
+        } catch (e) {
+          diag('BMP_SKIP', 'f#' + i + ' ' + (e && e.name ? e.name : 'Error'));
+          // 静默跳过无法读取的文件
+        }
+      }
+      if (!state.pendingBitmaps.length) {
+        diag('ALL_FAIL');
+        safeAlert('图片读取失败，请换一张截图试试');
+        return;
+      }
+      await slicePending();
+      // 未进 PICK（EMPTY / SLICE_ERR 等）：阶段条停留在末码，面板固定底部仍可见
+    } finally {
+      window.__importDiag.endImport();
+    }
+  }
+
+  // 原始行为（?diag=0 时保持与 master 一致）
+  async function onFilesChosenBase(fileList) {
+    var files = Array.prototype.slice.call(fileList || []).filter(isImageFile);
     if (!files.length) {
       safeAlert('请选择图片文件');
       return;
     }
     state.pendingFiles = files;
     state.pendingBitmaps = [];
-    // 单张读取失败静默跳过，绝不在这里 alert：
-    // 该路径仍可能 slicePending 成功出结果（如 1/4），而小工具容器对
-    // 异步续体里的原生 alert 有「文案丢失→空白框+红色确定」的桥接缺陷，
-    // 这正是线上空白弹窗的来源。
     for (var i = 0; i < files.length; i++) {
       try {
         var bmp = await fileToBitmap(files[i]);
@@ -2634,12 +3047,15 @@
       return;
     }
     var all = [];
+    if (DIAG_ON) diag('SLICE', 'bmp=' + state.pendingBitmaps.length);
     try {
       for (var i = 0; i < state.pendingBitmaps.length; i++) {
-        var part = await sliceFeed(state.pendingBitmaps[i]);
+        if (DIAG_ON) diag('FEED', 'f#' + i);
+        var part = await sliceFeed(state.pendingBitmaps[i], i);
         all = all.concat(part);
       }
     } catch (e) {
+      if (DIAG_ON) diag('SLICE_ERR', (e && e.name ? e.name : 'Error') + ' ' + (e && e.message ? e.message : ''));
       // 固定中文前缀，不把可能为空的 e.message 单独 alert
       safeAlert('切分失败：' + (e && e.message ? e.message : '未知错误'));
       showPick(false);
@@ -2648,6 +3064,7 @@
     state.candidates = all;
     state.selectedIds = {};
     if (!all.length) {
+      if (DIAG_ON) diag('EMPTY', 'tiles=0');
       safeAlert('没有切出可用封面，请换一张更接近双列信息流的整屏截图试试');
       showPick(false);
       if (el.pickRail) el.pickRail.innerHTML = '';
@@ -3093,7 +3510,9 @@
     });
 
     el.fileInput.addEventListener('change', function () {
-      onFilesChosen(el.fileInput.files);
+      onFilesChosen(el.fileInput.files).catch(function (e) {
+        diag('UNCAUGHT', (e && e.name ? e.name : 'Error') + ' ' + (e && e.message ? e.message : ''));
+      });
     });
 
     el.btnNote.addEventListener('click', function () {
@@ -3410,6 +3829,7 @@
     loadCustomCategories();
     showView('import');
     refreshLibrary().catch(function () {});
+    if (DIAG_ON && window.__importDiag) window.__importDiag.boot();
   }
 
   if (document.readyState === 'loading') {
