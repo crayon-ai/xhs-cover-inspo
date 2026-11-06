@@ -1600,6 +1600,7 @@ html.is-note body {
 }
 
 .lib-empty {
+  pointer-events: none; /* 纯展示空态，不拦截 chip/＋ 点击 */
   position: absolute;
   top: 0; right: 0; bottom: 0; left: 0;
   display: flex;
@@ -2569,3 +2570,156 @@ html.is-note body {
 .supports-flex-gap .note-type__list > * + * { margin-top: 0; }
 .supports-flex-gap .note-form > * + * { margin-top: 0; }
 .supports-flex-gap .sheet-cat-chips > * + * { margin-left: 0; }
+
+/* —— 灵感库分类筛选条（自建分类 · 参考 Demo 白底胶囊 + ＋） —— */
+.lib-chip-bar {
+  flex: none; /* 位于 lib-scroll 外、lib-stage 内，不参与滚动 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.lib-chip-bar::-webkit-scrollbar { display: none; }
+
+.lib-chip { cursor: pointer; }
+
+.lib-chip-add {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: #ffffff;
+  color: rgba(26, 26, 26, 0.5);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 140ms var(--ease-out);
+}
+.lib-chip-add:active { transform: scale(0.92); }
+.lib-chip-add:focus-visible {
+  outline: 2px solid rgba(26, 26, 26, 0.55);
+  outline-offset: 2px;
+}
+
+.lib-row-empty {
+  margin: 34px 0;
+  text-align: center;
+  color: rgba(26, 26, 26, 0.4);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+/* —— 创建分类弹层（居中白卡片，层级高于 lib-sheet(40)、低于 ask(200)） —— */
+.cat-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.cat-sheet[hidden] { display: none; }
+
+.cat-sheet__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(20, 28, 24, 0.35);
+  cursor: pointer;
+}
+
+.cat-sheet__panel {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px 18px 16px;
+  box-shadow: 0 12px 40px rgba(20, 28, 24, 0.18);
+}
+
+.cat-sheet__title {
+  margin: 0 0 14px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.cat-sheet__input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 12px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  background: #ffffff;
+}
+.cat-sheet__input:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+.cat-sheet__input::placeholder { color: var(--faint); }
+
+.cat-sheet__msg {
+  margin: 8px 2px 0;
+  min-height: 16px;
+  font-size: 12px;
+  color: #c45c5c;
+}
+
+.cat-sheet__btns {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.cat-sheet__cancel,
+.cat-sheet__ok {
+  flex: 1;
+  height: 42px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cat-sheet__cancel {
+  background: #ffffff;
+  color: rgba(26, 26, 26, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.16);
+}
+.cat-sheet__ok {
+  background: var(--ink);
+  color: #ffffff;
+  border: 1px solid var(--ink);
+}
+.cat-sheet__cancel:active,
+.cat-sheet__ok:active { transform: scale(0.98); }
+
+/* —— 极简轻提示 —— */
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  z-index: 210;
+  max-width: 78vw;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: rgba(26, 26, 26, 0.86);
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  pointer-events: none;
+}

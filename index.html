@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>封面灵感收集</title>
-  <link rel="stylesheet" href="./styles.css?v=20261105d" />
+  <link rel="stylesheet" href="./styles.css?v=20261106a" />
 </head>
 <body>
   <nav class="tabs" id="tabs" aria-label="主导航" hidden>
@@ -111,6 +111,9 @@
       <!-- 灵感库 · 分类横滑行 -->
       <section id="view-library" class="view">
         <div class="lib-stage">
+          <nav class="lib-chip-bar" id="lib-chip-bar" aria-label="分类筛选">
+            <button type="button" id="btn-lib-cat-add" class="lib-chip-add" aria-label="新建分类">＋</button>
+          </nav>
           <div class="lib-scroll" id="lib-scroll">
             <div id="library-rows" class="lib-rows" aria-label="按分类浏览"></div>
             <p id="library-empty" class="lib-empty" hidden>空</p>
@@ -156,6 +159,19 @@
       </div>
     </div>
   </div>
+  <div id="cat-sheet" class="cat-sheet" hidden>
+    <button type="button" id="cat-sheet-backdrop" class="cat-sheet__backdrop" aria-label="取消"></button>
+    <div class="cat-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="cat-sheet-title">
+      <h2 id="cat-sheet-title" class="cat-sheet__title">新分类</h2>
+      <input id="cat-sheet-input" class="cat-sheet__input" type="text" maxlength="20" placeholder="分类名" autocomplete="off" />
+      <p id="cat-sheet-msg" class="cat-sheet__msg"></p>
+      <div class="cat-sheet__btns">
+        <button type="button" id="cat-sheet-cancel" class="cat-sheet__cancel">取消</button>
+        <button type="button" id="cat-sheet-ok" class="cat-sheet__ok">创建</button>
+      </div>
+    </div>
+  </div>
+  <div id="app-toast" class="app-toast" hidden aria-live="polite"></div>
   <div id="ask" class="sheet-confirm ask" hidden>
     <button type="button" id="ask-backdrop" class="sheet-confirm__backdrop" aria-label="取消"></button>
     <div class="sheet-confirm__box" role="dialog" aria-modal="true">
@@ -177,6 +193,6 @@
     </svg>
     已收入灵感库
   </div>
-  <script src="./app.js?v=20261105d"></script>
+  <script src="./app.js?v=20261106a"></script>
 </body>
 </html>
