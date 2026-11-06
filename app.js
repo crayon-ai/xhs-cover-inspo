@@ -348,8 +348,8 @@
     busy: false,
     activeBitmaps: [], // 本 run 持有的、需要 close() 的 ImageBitmap
     phase: 'IDLE',
-    force: {}, // 测试钩：cibHang/cibReject/imgHang/imgError/readerHang/readerFail/toBlobHang/toDataUrlFail
-    timeouts: { cib: 1200, img: 3000, reader: 5000, blob: 2000, total: 45000 },
+    force: {}, // 测试钩：cibHang/cibReject/imgHang/imgError/readerHang/readerFail/toDataUrlFail/atobFail
+    timeouts: { cib: 1200, img: 3000, reader: 5000, total: 45000 },
     lines: [],
     memLines: []
   };
@@ -617,50 +617,60 @@
     });
   }
 
-  // 出图：toBlob 挂起时超时（默认 2000ms）防止 WebView 挂起 → toDataURL 同步兜底；
-  // 晚到的 toBlob 回调忽略。tag 仅用于诊断日志。
+  // 出图：主路径同步 canvas.toDataURL → 校验 data URI → atob → Uint8Array → Blob。
+  // 不再使用 canvas.toBlob / 2s BLOB_TO 超时（真机 RUN1 显示 toBlob 回调延迟 2s 间隔，
+  // 同步编码可立即返回；timeout 不能中断同步 native，也不再引入 toBlob fallback）。
+  // 分段日志 DATAURL_BEGIN/OK（native 编码）/BLOB_CREATE（decode+copy）/DATAURL_FAIL
+  // 让真机区分三段耗时。任一步骤同步抛错/空数据 → resolve(null)（沿用 0-tile 失败出口）。
   function canvasToBlob(canvas, type, quality, tag) {
     var t = type || 'image/jpeg';
     var q = quality == null ? 0.92 : quality;
     var force = LIFE.force || {};
     return new Promise(function (resolve) {
-      var done = false;
-      function finish(b) {
-        if (done) return;
-        done = true;
-        resolve(b || null);
-      }
-      function viaDataURL() {
-        lifeLog('BLOB_TO', tag || '');
-        try {
-          if (force.toDataUrlFail) throw new Error('forced toDataURL fail');
-          var data = canvas.toDataURL(t, q);
-          var bin = atob(data.split(',')[1] || '');
-          var arr = new Uint8Array(bin.length);
-          for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-          finish(new Blob([arr], { type: t }));
-        } catch (e) {
-          lifeLog('BLOB_NULL', tag || '');
-          finish(null);
-        }
-      }
-      if (!canvas.toBlob || force.toBlobHang) {
-        if (force.toBlobHang) lifeLog('BLOB', (tag || '') + ' force=hang');
-        setTimeout(viaDataURL, LIFE.timeouts.blob);
+      var tagStr = tag || '';
+      lifeLog('DATAURL_BEGIN', tagStr);
+      var tBegin = Date.now();
+      var data;
+      try {
+        if (force.toDataUrlFail) throw new Error('forced toDataURL fail');
+        data = canvas.toDataURL(t, q);
+      } catch (e) {
+        lifeLog('DATAURL_FAIL', tagStr + ' ' + (e && e.name ? e.name + ':' : 'err:') + String(e && e.message ? e.message : 'unknown').slice(0, 60));
+        resolve(null);
         return;
       }
-      var timer = setTimeout(viaDataURL, LIFE.timeouts.blob);
-      try {
-        canvas.toBlob(function (b) {
-          clearTimeout(timer);
-          if (done) return; // dataURL 已兜底，晚到回调忽略
-          lifeLog('BLOB_OK', tag || '');
-          finish(b);
-        }, t, q);
-      } catch (e) {
-        clearTimeout(timer);
-        viaDataURL();
+      var tEncode = Date.now();
+      // 校验 data URI：data:image...;base64, 前缀、非空、非 "data:,"、payload 非空
+      var comma = data.indexOf(',');
+      var head = comma >= 0 ? data.slice(0, comma) : '';
+      var payload = comma >= 0 ? data.slice(comma + 1) : '';
+      if (!/^data:image\/[a-z0-9.+-]+;base64$/i.test(head) || !payload) {
+        lifeLog('DATAURL_FAIL', tagStr + ' invalid-datauri len=' + data.length);
+        resolve(null);
+        return;
       }
+      lifeLog('DATAURL_OK', tagStr + ' ms=' + (tEncode - tBegin) + ' len=' + data.length);
+      var bin, arr;
+      try {
+        if (force.atobFail) throw (function () { var e = new Error('forced atob fail'); e.name = 'InvalidCharacterError'; return e; })();
+        bin = atob(payload);
+        arr = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      } catch (e2) {
+        lifeLog('DATAURL_FAIL', tagStr + ' ' + (e2 && e2.name === 'InvalidCharacterError' ? 'atobFail' : 'bytesFail') + ':' + String(e2 && e2.message ? e2.message : 'unknown').slice(0, 60));
+        resolve(null);
+        return;
+      }
+      var blob;
+      try {
+        blob = new Blob([arr], { type: t });
+      } catch (e3) {
+        lifeLog('DATAURL_FAIL', tagStr + ' blobFail:' + String(e3 && e3.message ? e3.message : 'unknown').slice(0, 60));
+        resolve(null);
+        return;
+      }
+      lifeLog('BLOB_CREATE', tagStr + ' bytes=' + arr.length + ' ms=' + (Date.now() - tEncode));
+      resolve(blob);
     });
   }
 
@@ -2896,11 +2906,23 @@
   // 导入总入口（含锁 + runId + 总 deadline）。失败/成功都保证清 busy，
   // 绝不永久卡 loading。
   async function onFilesChosen(fileList) {
-    // 导入锁：busy 时非阻塞提示并忽略本次 change，绝不并发双开（ANALYSIS A6）
+    // 入口分流（EVIDENCE：raw0 与 all-filtered 在 cc448154 是同一行日志，无法区分）：
+    // 1) 先记录 raw metadata（rawLen），再判断 busy，再判断 raw0 —— 不用 fileList||[] 吞掉真实空；
+    // 2) busy → BUSY + return，不增 runId、不动进行中的 run；
+    // 3) raw0 → EMPTY_RAW（不动 pending/bitmaps，不造假 run），给用户可重选提示；
+    // 4) 有文件 → snapshot（slice.call）→ 逐项 FILE 日志 → FILES 汇总 → 全被滤 → EMPTY_FILTERED。
+    // 清 input.value 只发生在 resetPick()，本函数不清不改（保持 cc448154 行为）。
+    var rawLen = fileList && fileList.length != null ? fileList.length : -1;
+    var rawEmpty = fileList == null || rawLen === 0;
     if (LIFE.busy) {
-      lifeLog('BUSY', 'ignored run=' + LIFE.runId);
+      lifeLog('BUSY', 'ignored run=' + LIFE.runId + ' raw=' + rawLen);
       appToast('正在导入，请稍候');
       return;
+    }
+    if (rawEmpty) {
+      lifeLog('EMPTY_RAW', 'raw=' + rawLen + ' busy=false run=' + LIFE.runId);
+      appToast('未获取到文件，请重新选择');
+      return; // 不增 run，不产生假 decode / no-image-file
     }
     LIFE.busy = true;
     LIFE.runId++;
@@ -2908,14 +2930,31 @@
     setPhase('RUN' + runId + ' · CHG');
     closeAllBitmaps('NEW_RUN'); // 清上一 run 残留
     clearImportFail();
-    var files = Array.prototype.slice.call(fileList || []).filter(isImageFile);
-    if (!files.length) {
-      lifeLog('EMPTY', 'run=' + runId + ' no-image-file');
+    var snapshot = Array.prototype.slice.call(fileList); // snapshot 后才消费，业务引用不再依赖 fileList
+    var nRaw = snapshot.length;
+    var accepted = [];
+    var rejected = 0;
+    var k, f;
+    for (k = 0; k < nRaw; k++) {
+      f = snapshot[k];
+      var pass = isImageFile(f);
+      if (pass) accepted.push(f); else rejected++;
+      var mime = f && f.type ? String(f.type) : 'unknown';
+      var size = f && typeof f.size === 'number' && isFinite(f.size) ? f.size : -1;
+      var nameLc = f && f.name ? String(f.name).toLowerCase() : '';
+      var dot = nameLc.lastIndexOf('.');
+      var ext = dot >= 0 ? nameLc.slice(dot + 1).replace(/[^a-z0-9]/g, '') : '';
+      lifeLog('FILE', 'run=' + runId + ' i=' + k + ' mime=' + mime + ' size=' + size + ' ext=' + (ext || 'none') + ' pass=' + pass);
+    }
+    lifeLog('FILES', 'run=' + runId + ' raw=' + nRaw + ' accepted=' + accepted.length + ' rejected=' + rejected);
+    if (!accepted.length) {
+      lifeLog('EMPTY_FILTERED', 'run=' + runId + ' raw=' + nRaw + ' accepted=0');
       setPhase('RUN' + runId + ' · FAIL');
       showImportFail('请选择图片文件');
       LIFE.busy = false;
       return;
     }
+    var files = accepted;
     lifeLog('CHG', 'run=' + runId + ' f=' + files.length);
     showImportLoading('导入中…');
     var t0 = Date.now();
