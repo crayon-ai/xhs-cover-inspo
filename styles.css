@@ -1,3 +1,5 @@
+/* Source Han Sans (思源黑体) 子集：Copyright 2014-2021 Adobe,
+   SIL Open Font License 1.1 授权（https://scripts.sil.org/OFL） */
 @font-face {
   font-family: "Source Han Sans SC Title";
   src: url("./assets/fonts/SourceHanSansSC-Heavy-title.woff2") format("woff2");
@@ -2753,4 +2755,34 @@ html.is-note body {
   line-height: 1.4;
   text-align: center;
   pointer-events: none;
+}
+
+/* ================= 导入状态卡：加载/失败非阻塞反馈（失败含「再试一次」） ================= */
+.import-status {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%);
+  z-index: 30;
+  max-width: 82%;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(20, 20, 20, 0.86);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.import-status.is-loading { color: rgba(255, 255, 255, 0.92); }
+.import-status.is-fail { background: rgba(80, 20, 20, 0.9); flex-direction: column; gap: 6px; }
+.import-status__retry {
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: transparent;
+  color: #fff;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 13px;
 }

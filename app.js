@@ -313,64 +313,244 @@
     return /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/.test(name);
   }
 
-  async function fileToBitmap(file) {
-    // 优先 createImageBitmap；小工具 WebView 上部分相册 File 会让 CIB reject，
-    // 失败不抛出，降级到 Image(blob:)，再不行降级 FileReader → dataURL
+  // 超时包装：部分 WebView 对相册 File 解码可能挂起，超时后降级；
+  // 超时以 TimeoutError reject，晚到的原 promise 结果不再消费。
+  function withTimeout(promise, ms) {
+    var settled = false;
+    var p = Promise.resolve(promise).then(
+      function (v) { settled = true; return v; },
+      function (e) { settled = true; throw e; }
+    );
+    var to = new Promise(function (_resolve, reject) {
+      setTimeout(function () {
+        if (!settled) {
+          var err = new Error('timeout');
+          err.name = 'TimeoutError';
+          reject(err);
+        }
+      }, ms);
+    });
+    return Promise.race([p, to]);
+  }
+
+  // 导入运行状态：runId 防并发 change 互相清 state；busy 导入锁；
+  // activeBitmaps 记录本 run 持有的、需要 close() 的 ImageBitmap。
+  var IMPORT = {
+    runId: 0,
+    busy: false,
+    failShown: false,
+    activeBitmaps: [],
+    timeouts: { cib: 1200, img: 3000, reader: 5000, total: 45000 }
+  };
+
+  // ---- bitmap 登记/释放：run 边界兜底 close，slice 用完即 close ----
+  function registerBitmap(bmp) {
+    if (bmp && bmp.close && IMPORT.activeBitmaps.indexOf(bmp) < 0) IMPORT.activeBitmaps.push(bmp);
+  }
+  function releaseBitmap(bmp) {
+    var i = IMPORT.activeBitmaps.indexOf(bmp);
+    if (i >= 0) IMPORT.activeBitmaps.splice(i, 1);
+    if (bmp && bmp.close) {
+      try { bmp.close(); } catch (e) {}
+    }
+  }
+  function closeAllBitmaps() {
+    var n = IMPORT.activeBitmaps.length;
+    for (var i = 0; i < n; i++) {
+      var b = IMPORT.activeBitmaps[i];
+      if (b && b.close) { try { b.close(); } catch (e) {} }
+    }
+    IMPORT.activeBitmaps = [];
+  }
+
+  // ---- 加载/失败状态卡（非阻塞，替代 alert 主路径） ----
+  function showImportLoading(text) {
+    var card = document.getElementById('import-status');
+    if (!card) return;
+    card.hidden = false;
+    card.className = 'import-status is-loading';
+    card.textContent = text || '导入中…';
+  }
+  function showImportFail(text) {
+    var card = document.getElementById('import-status');
+    IMPORT.failShown = true;
+    if (!card) { appToast(text); return; }
+    card.hidden = false;
+    card.className = 'import-status is-fail';
+    card.textContent = '';
+    var span = document.createElement('span');
+    span.textContent = text;
+    card.appendChild(span);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'import-retry';
+    btn.className = 'import-status__retry';
+    btn.textContent = '再试一次';
+    btn.addEventListener('click', function () {
+      hideImportStatus();
+      if (el.fileInput) el.fileInput.click();
+    });
+    card.appendChild(btn);
+  }
+  function hideImportStatus() {
+    IMPORT.failShown = false;
+    var card = document.getElementById('import-status');
+    if (card) { card.hidden = true; card.textContent = ''; }
+  }
+  function clearImportFail() { hideImportStatus(); }
+
+  async function fileToBitmap(file, runId) {
+    // 优先 createImageBitmap；部分 WebView 对相册 File 解码可能挂起或 reject，
+    // 有界超时后顺序降级到 Image(blob:)，再不行降级 FileReader → dataURL
     //（App 对 blob: 更严时），避免中断导入链路。
+    runId = runId == null ? IMPORT.runId : runId;
+    // 第 1 步：createImageBitmap，有界；超时后置 cibCancelled，
+    // 晚到的结果只 close 不交给业务（不做「CIB 与 Image 双成功竞争」）。
     if (typeof createImageBitmap === 'function') {
+      var cibCancelled = false;
+      var cibPromise = createImageBitmap(file);
+      cibPromise.then(function (bmp) {
+        // 超时降级后晚到的结果：只 close、不交给业务
+        if (cibCancelled) {
+          if (bmp && bmp.close) { try { bmp.close(); } catch (e) {} }
+        }
+      }, function () {
+        // late reject 由 race/sidecar 吞掉，避免 unhandledrejection
+      });
       try {
-        return await createImageBitmap(file);
+        var bmp = await withTimeout(cibPromise, IMPORT.timeouts.cib);
+        if (runId !== IMPORT.runId) {
+          // 迟到结果属于旧 run：close，禁止写入 state
+          if (bmp && bmp.close) { try { bmp.close(); } catch (e) {} }
+          var err = new Error('stale run');
+          err.name = 'StaleRunError';
+          throw err;
+        }
+        registerBitmap(bmp);
+        return bmp;
       } catch (e) {
-        // 降级继续
+        if (e && e.name === 'StaleRunError') throw e;
+        cibCancelled = true; // 先置位，再降级；late CIB 只 close
       }
     }
+    // 第 2 步：Image(blob:)，3000ms 有界；超时 revokeObjectURL 后走第 3 步
+    try {
+      return await decodeViaBlobImage(file, runId);
+    } catch (e) {
+      if (e && e.name === 'StaleRunError') throw e;
+    }
+    // 第 3 步：FileReader → dataURL → Image，整体 5000ms 有界
+    return await decodeViaFileReader(file, runId);
+  }
+
+  function decodeViaBlobImage(file, runId) {
     return new Promise(function (resolve, reject) {
+      var finished = false;
       var url = URL.createObjectURL(file);
       var img = new Image();
+      var to = setTimeout(function () {
+        if (finished) return;
+        finished = true;
+        try { URL.revokeObjectURL(url); } catch (e) {}
+        reject(new Error('image timeout'));
+      }, IMPORT.timeouts.img);
       img.onload = function () {
+        if (finished) return;
+        finished = true;
+        clearTimeout(to);
         URL.revokeObjectURL(url);
+        if (runId !== IMPORT.runId) {
+          var err = new Error('stale run');
+          err.name = 'StaleRunError';
+          reject(err);
+          return;
+        }
         resolve(img);
       };
       img.onerror = function () {
+        if (finished) return;
+        finished = true;
+        clearTimeout(to);
         URL.revokeObjectURL(url);
-        // 再试 FileReader → dataURL（App 对 blob: 更严时）
-        var reader = new FileReader();
-        reader.onload = function () {
-          var img2 = new Image();
-          img2.onload = function () {
-            resolve(img2);
-          };
-          img2.onerror = function () {
-            reject(new Error('图片加载失败'));
-          };
-          img2.src = reader.result;
-        };
-        reader.onerror = function () {
-          reject(new Error('图片加载失败'));
-        };
-        reader.readAsDataURL(file);
+        reject(new Error('image error'));
       };
       img.src = url;
     });
   }
 
+  function decodeViaFileReader(file, runId) {
+    return new Promise(function (resolve, reject) {
+      var finished = false;
+      var fail = function (msg) {
+        if (finished) return;
+        finished = true;
+        clearTimeout(to);
+        reject(new Error(msg));
+      };
+      var to = setTimeout(function () {
+        fail('reader timeout');
+      }, IMPORT.timeouts.reader);
+      var reader = new FileReader();
+      reader.onload = function () {
+        if (finished) return;
+        var img2 = new Image();
+        img2.onload = function () {
+          if (finished) return;
+          finished = true;
+          clearTimeout(to);
+          if (runId !== IMPORT.runId) {
+            var err = new Error('stale run');
+            err.name = 'StaleRunError';
+            reject(err);
+            return;
+          }
+          resolve(img2);
+        };
+        img2.onerror = function () { fail('dataurl image error'); };
+        img2.src = reader.result;
+      };
+      reader.onerror = function () { fail('reader error'); };
+      reader.readAsDataURL(file);
+    });
+  }
+
   function canvasToBlob(canvas, type, quality) {
+    // 同步 toDataURL 主路径（部分 WebView 的 canvas.toBlob 会静默不出回调）：
+    // 校验 data URI 头与 payload，任何一步失败 resolve(null)，消费方按失败处理。
+    var t = type || 'image/jpeg';
+    var q = quality == null ? 0.92 : quality;
     return new Promise(function (resolve) {
-      if (canvas.toBlob) {
-        canvas.toBlob(function (b) {
-          resolve(b || null);
-        }, type || 'image/jpeg', quality == null ? 0.92 : quality);
-      } else {
-        try {
-          var data = canvas.toDataURL(type || 'image/jpeg', quality == null ? 0.92 : quality);
-          var bin = atob(data.split(',')[1] || '');
-          var arr = new Uint8Array(bin.length);
-          for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-          resolve(new Blob([arr], { type: type || 'image/jpeg' }));
-        } catch (e) {
-          resolve(null);
-        }
+      var data;
+      try {
+        data = canvas.toDataURL(t, q);
+      } catch (e) {
+        resolve(null);
+        return;
       }
+      var comma = data.indexOf(',');
+      var head = comma >= 0 ? data.slice(0, comma) : '';
+      var payload = comma >= 0 ? data.slice(comma + 1) : '';
+      if (!/^data:image\/[a-z0-9.+-]+;base64$/i.test(head) || !payload) {
+        resolve(null);
+        return;
+      }
+      var bin, arr;
+      try {
+        bin = atob(payload);
+        arr = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      } catch (e2) {
+        resolve(null);
+        return;
+      }
+      var blob;
+      try {
+        blob = new Blob([arr], { type: t });
+      } catch (e3) {
+        resolve(null);
+        return;
+      }
+      resolve(blob);
     });
   }
 
@@ -789,11 +969,15 @@
     return tiles;
   }
 
-  async function sliceFeed(bitmap) {
+  async function sliceFeed(bitmap, runId) {
+    runId = runId == null ? IMPORT.runId : runId;
     var imgW = bitmap.width || bitmap.naturalWidth;
     var imgH = bitmap.height || bitmap.naturalHeight;
     var results = [];
-    if (!imgW || !imgH) return results;
+    if (!imgW || !imgH) {
+      releaseBitmap(bitmap);
+      return results;
+    }
     var data = buildPixelData(bitmap, imgW, imgH);
     var tiles = detectGridCovers(data, imgW, imgH);
     for (var t = 0; t < tiles.length; t++) {
@@ -823,6 +1007,8 @@
       if (a.row !== b.row) return a.row - b.row;
       return a.col - b.col;
     });
+    // 本 bitmap 已切完：用完即 close，从本 run 持有列表移除
+    releaseBitmap(bitmap);
     return results;
   }
 
@@ -843,7 +1029,10 @@
       targetCanvas.height = h;
       var ctx = targetCanvas.getContext('2d');
       ctx.drawImage(bmpOrImg, 0, 0);
-      if (bmpOrImg.close) bmpOrImg.close();
+      releaseBitmap(bmpOrImg);
+    }, function (e) {
+      // 失败路径：fileToBitmap 内部已 close 迟到的 CIB/降级产物，这里只透传
+      throw e;
     });
   }
 
@@ -2590,31 +2779,99 @@
   }
 
 
+  // 导入总入口（含锁 + runId + 总闸）。失败/成功都保证清 busy，
+  // 绝不永久卡 loading；失败出口走页面内状态卡，不用 alert 主路径。
   async function onFilesChosen(fileList) {
-    var files = Array.prototype.slice.call(fileList || []).filter(isImageFile);
-    if (!files.length) {
-      safeAlert('请选择图片文件');
+    // 入口分流：先判 busy，再判空 —— 不用 fileList||[] 吞掉真实空选择；
+    // 清 input.value 只发生在 resetPick()，本函数不清不改。
+    var rawEmpty = fileList == null || !fileList.length;
+    if (IMPORT.busy) {
+      appToast('正在导入，请稍候');
+      return; // 不动进行中的 run
+    }
+    if (rawEmpty) {
+      appToast('未获取到文件，请重新选择');
+      return; // 不增 run，不产生假 decode / no-image-file
+    }
+    IMPORT.busy = true;
+    IMPORT.runId++;
+    var runId = IMPORT.runId;
+    closeAllBitmaps(); // 清上一 run 残留
+    clearImportFail();
+    var snapshot = Array.prototype.slice.call(fileList); // snapshot 后才消费，业务引用不再依赖 fileList
+    var accepted = [];
+    for (var k = 0; k < snapshot.length; k++) {
+      if (isImageFile(snapshot[k])) accepted.push(snapshot[k]);
+    }
+    if (!accepted.length) {
+      showImportFail('请选择图片文件');
+      IMPORT.busy = false;
       return;
     }
+    var files = accepted;
+    showImportLoading('导入中…');
+    try {
+      await Promise.race([
+        importWork(files, runId),
+        new Promise(function (_resolve, reject) {
+          setTimeout(function () {
+            var err = new Error('import total timeout');
+            err.name = 'TotalTimeoutError';
+            reject(err);
+          }, IMPORT.timeouts.total);
+        })
+      ]);
+    } catch (e) {
+      // 统一失败出口：页面内非阻塞状态卡 + 再试按钮，不依赖 alert 主路径
+      if (e && e.name === 'TotalTimeoutError') {
+        // 总超时：作废本 run（后台残留回调按 stale 丢弃），清理资源
+        closeAllBitmaps();
+        IMPORT.runId++;
+        showImportFail('导入超时，请重试');
+        showPick(false);
+      } else {
+        showImportFail('导入异常，请重试');
+        showPick(false);
+      }
+    } finally {
+      // 若期间用户已开新 run（理论上锁下不可能），不动新 run 的资源
+      if (IMPORT.runId === runId) {
+        closeAllBitmaps();
+        // 失败卡保留给用户看（含「再试一次」），只清 loading
+        if (!IMPORT.failShown) hideImportStatus();
+        IMPORT.busy = false;
+      } else {
+        IMPORT.busy = false;
+      }
+    }
+  }
+
+  async function importWork(files, runId) {
     state.pendingFiles = files;
     state.pendingBitmaps = [];
     // 单张读取失败静默跳过，绝不在这里 alert：
-    // 该路径仍可能 slicePending 成功出结果（如 1/4），而小工具容器对
-    // 异步续体里的原生 alert 有「文案丢失→空白框+红色确定」的桥接缺陷，
-    // 这正是线上空白弹窗的来源。
+    // 该路径仍可能 slicePending 成功出结果（如 1/4）。
     for (var i = 0; i < files.length; i++) {
       try {
-        var bmp = await fileToBitmap(files[i]);
+        var bmp = await fileToBitmap(files[i], runId);
+        if (runId !== IMPORT.runId) {
+          // 旧 run 迟到结果：close，禁止写入 state、禁止 showPick
+          releaseBitmap(bmp);
+          continue;
+        }
         state.pendingBitmaps.push(bmp);
       } catch (e) {
+        if (e && e.name === 'StaleRunError') throw e;
         // 静默跳过无法读取的文件
       }
     }
+    if (runId !== IMPORT.runId) return;
     if (!state.pendingBitmaps.length) {
-      safeAlert('图片读取失败，请换一张截图试试');
+      showImportFail('图片读取失败，请换一张截图试试');
+      showPick(false);
       return;
     }
-    await slicePending();
+    await slicePending(runId);
   }
 
   function resetPick() {
@@ -2622,13 +2879,15 @@
     state.pendingBitmaps = [];
     state.candidates = [];
     state.selectedIds = {};
+    closeAllBitmaps();
     if (el.fileInput) el.fileInput.value = '';
     if (el.pickRail) el.pickRail.innerHTML = '';
     updateSaveSelectedBtn();
     showPick(false);
   }
 
-  async function slicePending() {
+  async function slicePending(runId) {
+    runId = runId == null ? IMPORT.runId : runId;
     if (!state.pendingBitmaps.length) {
       showPick(false);
       return;
@@ -2636,24 +2895,30 @@
     var all = [];
     try {
       for (var i = 0; i < state.pendingBitmaps.length; i++) {
-        var part = await sliceFeed(state.pendingBitmaps[i]);
+        var part = await sliceFeed(state.pendingBitmaps[i], runId);
         all = all.concat(part);
       }
     } catch (e) {
-      // 固定中文前缀，不把可能为空的 e.message 单独 alert
-      safeAlert('切分失败：' + (e && e.message ? e.message : '未知错误'));
+      closeAllBitmaps();
+      // 固定中文前缀，不把可能为空的 e.message 单独弹窗
+      showImportFail('切分失败：' + (e && e.message ? e.message : '未知错误'));
       showPick(false);
+      return;
+    }
+    if (runId !== IMPORT.runId) {
+      // 旧 run 切出的结果丢弃，不写 state、不进 PICK
       return;
     }
     state.candidates = all;
     state.selectedIds = {};
     if (!all.length) {
-      safeAlert('没有切出可用封面，请换一张更接近双列信息流的整屏截图试试');
+      showImportFail('没有切出可用封面，请换一张更接近双列信息流的整屏截图试试');
       showPick(false);
       if (el.pickRail) el.pickRail.innerHTML = '';
       return;
     }
     showView('import');
+    clearImportFail();
     showPick(true);
     renderCandidates();
   }
@@ -3093,7 +3358,9 @@
     });
 
     el.fileInput.addEventListener('change', function () {
-      onFilesChosen(el.fileInput.files);
+      onFilesChosen(el.fileInput.files).catch(function () {
+        showImportFail('导入异常，请重试');
+      });
     });
 
     el.btnNote.addEventListener('click', function () {
