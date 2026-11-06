@@ -1554,8 +1554,8 @@
       createdAt: Date.now()
     });
     syncExtraCategories();
-    persistCustomCategories();
     state.libFilter = name;
+    persistCustomCategories();
     closeCatSheet();
     renderLibrary();
   }
