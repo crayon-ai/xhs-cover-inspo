@@ -1600,6 +1600,7 @@ html.is-note body {
 }
 
 .lib-empty {
+  pointer-events: none; /* 纯展示空态，不拦截 chip/＋ 点击 */
   position: absolute;
   top: 0; right: 0; bottom: 0; left: 0;
   display: flex;
@@ -2572,6 +2573,7 @@ html.is-note body {
 
 /* —— 灵感库分类筛选条（自建分类 · 参考 Demo 白底胶囊 + ＋） —— */
 .lib-chip-bar {
+  flex: none; /* 位于 lib-scroll 外、lib-stage 内，不参与滚动 */
   display: flex;
   align-items: center;
   gap: 8px;
