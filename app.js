@@ -21,6 +21,8 @@
   var DB_NAME = 'xhs-cover-inspo';
   var DB_VERSION = 1;
   var STORE = 'inspirations';
+  // 自建分类持久化：customs 稳定 id 只存在这份列表；封面记录仍用 category: 名字字符串
+  var CATS_KEY = 'xhs-cover-inspo-cats-v1';
   // Projection analysis tuning (validated on real feed screenshots)
   var PROJ_STEP = 3;      // px stride when sampling projections
   var WHITE_BRIGHT = 245; // pixel brightness >= this counts as "white"
@@ -38,6 +40,8 @@
     noteCategory: '',
     coverType: '',
     extraCategories: [],
+    customCategories: [],
+    libFilter: 'all',
     sheetId: null,
     sheetBase: null,
     sheetDraft: null,
@@ -138,6 +142,77 @@
     return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
+  // —— 自建分类：localStorage 读写全部 try/catch，失败降级内存（收藏只在 IndexedDB）——
+
+  function syncExtraCategories() {
+    state.extraCategories = (state.customCategories || []).map(function (c) {
+      return c.name;
+    }).filter(Boolean);
+  }
+
+  function persistCustomCategories() {
+    try {
+      localStorage.setItem(CATS_KEY, JSON.stringify({
+        version: 1,
+        customs: state.customCategories || [],
+        filter: state.libFilter || 'all'
+      }));
+    } catch (e) {
+      // 写失败：内存保留，轻提示不打断主流程
+      appToast('分类暂未保存到本地');
+    }
+  }
+
+  function loadCustomCategories() {
+    try {
+      var raw = localStorage.getItem(CATS_KEY);
+      if (raw) {
+        var data = JSON.parse(raw);
+        if (data && data.version === 1 && Array.isArray(data.customs)) {
+          state.customCategories = data.customs.filter(function (c) {
+            return c && c.name;
+          }).map(function (c) {
+            return { id: String(c.id || 'custom_' + uid()), name: String(c.name), createdAt: Number(c.createdAt) || 0 };
+          });
+        }
+        state.libFilter = typeof data.filter === 'string' && data.filter ? data.filter : 'all';
+      }
+    } catch (e) {
+      // 读失败：空列表 + all，内存降级
+    }
+    syncExtraCategories();
+  }
+
+  function findCustomByName(name) {
+    var norm = normalizeCategoryName(name);
+    var list = state.customCategories || [];
+    for (var i = 0; i < list.length; i++) {
+      if (normalizeCategoryName(list[i].name) === norm) return list[i];
+    }
+    return null;
+  }
+
+  /** 兼容「历史里已有但未入 customs 的分类名」：扫库补录，绝不清空 library */
+  function syncCustomCategoriesFromLibrary() {
+    var seen = {};
+    (state.library || []).forEach(function (item) {
+      var name = recordCategory(item);
+      if (name && !seen[name]) seen[name] = true;
+    });
+    var added = false;
+    Object.keys(seen).forEach(function (name) {
+      rememberCategory(name);
+      if (!findCustomByName(name)) {
+        state.customCategories.push({ id: 'custom_' + uid(), name: name, createdAt: Date.now() });
+        added = true;
+      }
+    });
+    if (added || state.extraCategories.length !== (state.customCategories || []).length) {
+      syncExtraCategories();
+      persistCustomCategories();
+    }
+  }
+
   function showView(name) {
     state.view = name;
     qsAll('.view').forEach(function (v) {
@@ -188,6 +263,21 @@
     var s = String(msg == null ? '' : msg).trim();
     if (!s) return;
     alert(s);
+  }
+
+  // 极简轻提示（.app-toast）：替代 alert 做非阻塞反馈
+  var appToastTimer = 0;
+  function appToast(text) {
+    var node = document.getElementById('app-toast');
+    var s = String(text == null ? '' : text).trim();
+    if (!node || !s) return;
+    node.textContent = s;
+    node.hidden = false;
+    if (appToastTimer) clearTimeout(appToastTimer);
+    appToastTimer = setTimeout(function () {
+      appToastTimer = 0;
+      node.hidden = true;
+    }, 1500);
   }
 
   // 相册文件 MIME 可能为空字符串，此时按扩展名判断是否图片，避免误报「请选择图片文件」
@@ -936,9 +1026,22 @@
     }
   ];
 
-  function coverTypeById(id) {
+  /** 默认五类命中；否则查自建分类，合成同构 type（表单字段沿用结果展示型），保证能填能存 */
+  function getCoverType(id) {
     for (var i = 0; i < COVER_TYPES.length; i++) {
       if (COVER_TYPES[i].id === id) return COVER_TYPES[i];
+    }
+    var list = state.customCategories || [];
+    for (var j = 0; j < list.length; j++) {
+      if (list[j].id === id) {
+        return {
+          id: id,
+          name: list[j].name,
+          custom: true,
+          a: { key: 'coreResult', label: '核心结果', ph: '…' },
+          b: { key: 'evidence', label: '证据形式', ph: '…' }
+        };
+      }
     }
     return null;
   }
@@ -946,7 +1049,7 @@
   function renderCoverTypes() {
     if (!el.noteTypeList) return;
     el.noteTypeList.innerHTML = '';
-    COVER_TYPES.forEach(function (type) {
+    COVER_TYPES.concat(state.customCategories || []).forEach(function (type) {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'note-type__btn' + (state.coverType === type.id ? ' is-on' : '');
@@ -961,7 +1064,7 @@
   }
 
   function showNoteStep() {
-    var chosen = coverTypeById(state.coverType);
+    var chosen = getCoverType(state.coverType);
     if (el.noteType) el.noteType.hidden = !!chosen;
     if (el.noteForm) el.noteForm.hidden = !chosen;
     if (el.btnNoteSkipType) el.btnNoteSkipType.hidden = !!chosen;
@@ -974,7 +1077,7 @@
   }
 
   function chooseCoverType(id) {
-    if (!coverTypeById(id)) return;
+    if (!getCoverType(id)) return;
     if (state.coverType !== id) {
       if (el.fieldA) el.fieldA.value = '';
       if (el.fieldB) el.fieldB.value = '';
@@ -1042,7 +1145,7 @@
     if (!item) return;
 
     if (!skip) {
-      var type = coverTypeById(state.coverType);
+      var type = getCoverType(state.coverType);
       if (!type) return;
       var record = {
         id: uid(),
@@ -1162,6 +1265,7 @@
       state.library = [];
       alert('读取灵感库失败');
     }
+    syncCustomCategoriesFromLibrary();
     renderLibrary();
     renderNoteCategories();
     refreshImportStack();
@@ -1310,8 +1414,124 @@
       el.libraryEmpty.textContent = '空';
     }
     if (el.btnClearAll) el.btnClearAll.hidden = isEmpty;
+    renderLibFilterChips();
     if (isEmpty) return;
-    renderLibraryRows();
+    if (state.libFilter && state.libFilter !== 'all') {
+      renderLibFilteredRow(state.libFilter);
+    } else {
+      renderLibraryRows();
+    }
+  }
+
+  // —— 灵感库分类筛选条（白底胶囊 + ＋ 创建）——
+
+  function libFilterNames() {
+    var names = ['全部'];
+    COVER_TYPES.forEach(function (t) {
+      if (names.indexOf(t.name) === -1) names.push(t.name);
+    });
+    (state.customCategories || []).forEach(function (c) {
+      if (c.name && names.indexOf(c.name) === -1) names.push(c.name);
+    });
+    return names;
+  }
+
+  function renderLibFilterChips() {
+    var bar = el.libChipBar;
+    if (!bar) return;
+    qsAll('.lib-chip', bar).forEach(function (n) {
+      bar.removeChild(n);
+    });
+    var addBtn = el.btnLibCatAdd;
+    libFilterNames().forEach(function (name) {
+      var isAll = name === '全部';
+      var active = isAll ? (!state.libFilter || state.libFilter === 'all') : state.libFilter === name;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cat-chip lib-chip' + (active ? ' is-active' : '');
+      b.textContent = name;
+      b.setAttribute('aria-pressed', active ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        var next = isAll ? 'all' : name;
+        if (state.libFilter === next) return;
+        state.libFilter = next;
+        persistCustomCategories();
+        renderLibrary();
+        if (el.libScroll) el.libScroll.scrollTop = 0;
+      });
+      bar.insertBefore(b, addBtn);
+    });
+  }
+
+  /** 筛选单个分类：只渲染该分类一行；0 张时显示「还没有封面」空态 */
+  function renderLibFilteredRow(name) {
+    if (!el.libraryRows) return;
+    el.libraryRows.innerHTML = '';
+    var items = (state.library || []).filter(function (it) {
+      return recordCategory(it) === name;
+    });
+    if (!items.length) {
+      var p = document.createElement('p');
+      p.className = 'lib-row-empty';
+      p.textContent = '还没有封面';
+      el.libraryRows.appendChild(p);
+      return;
+    }
+    var row = buildLibRow({ name: name, title: name, items: items });
+    el.libraryRows.appendChild(row);
+    renderLibRowItems(row); // 单行视图直接渲染，无需懒加载
+  }
+
+  // —— 创建分类弹层（cat-sheet）——
+
+  function openCatSheet() {
+    if (!el.catSheet) return;
+    if (el.catSheetInput) el.catSheetInput.value = '';
+    if (el.catSheetMsg) el.catSheetMsg.textContent = '';
+    el.catSheet.hidden = false;
+    if (el.catSheetInput) {
+      try { el.catSheetInput.focus(); } catch (e) {}
+    }
+  }
+
+  function closeCatSheet() {
+    if (!el.catSheet) return;
+    el.catSheet.hidden = true;
+    if (el.catSheetMsg) el.catSheetMsg.textContent = '';
+  }
+
+  function submitCatSheet() {
+    if (!el.catSheetInput) return;
+    var name = normalizeCategoryName(el.catSheetInput.value);
+    if (!name) {
+      if (el.catSheetMsg) el.catSheetMsg.textContent = '请输入分类名';
+      return;
+    }
+    // 与默认类型或已有自定义重名（忽略多余空白）：关闭并选中已有
+    var existing = null;
+    COVER_TYPES.forEach(function (t) {
+      if (!existing && normalizeCategoryName(t.name) === name) existing = t.name;
+    });
+    var custom = findCustomByName(name);
+    if (custom && !existing) existing = custom.name;
+    if (existing) {
+      closeCatSheet();
+      state.libFilter = existing;
+      persistCustomCategories();
+      renderLibrary();
+      appToast('已有「' + existing + '」，已为你选中');
+      return;
+    }
+    state.customCategories.push({
+      id: 'custom_' + uid(),
+      name: name,
+      createdAt: Date.now()
+    });
+    syncExtraCategories();
+    persistCustomCategories();
+    state.libFilter = name;
+    closeCatSheet();
+    renderLibrary();
   }
 
   function buildLibRow(sec) {
@@ -1448,7 +1668,7 @@
   }
 
   function sheetSnapshot(item) {
-    var type = coverTypeById(item && item.coverType);
+    var type = getCoverType(item && item.coverType);
     var snap = {
       coverType: type ? type.id : '',
       headline: String((item && item.headline) || ''),
@@ -1576,7 +1796,7 @@
   function fillSheetFields(item) {
     if (!el.sheetFields || !item || !state.sheetDraft) return;
     el.sheetFields.innerHTML = '';
-    var type = coverTypeById(state.sheetDraft.coverType);
+    var type = getCoverType(state.sheetDraft.coverType);
     if (type) sheetAddType(el.sheetFields, type.name);
     sheetAddEditor(el.sheetFields, '封面主文案', 'headline');
     sheetAddEditor(el.sheetFields, '为什么想点', 'whyClick');
@@ -1598,8 +1818,15 @@
       prev[key] = item[key];
       item[key] = sheetNorm(draft[key]);
     });
-    var savedType = coverTypeById(item.coverType);
-    if (savedType) item.category = savedType.name;
+    // 用户在 chips 里选的归档分类优先；没选（空/未分类）才回退类型默认名
+    var savedType = getCoverType(item.coverType);
+    var chosenCat = sheetNorm(draft.category);
+    if (chosenCat && chosenCat !== UNCATEGORIZED) {
+      item.category = chosenCat;
+      rememberCategory(chosenCat);
+    } else if (savedType) {
+      item.category = savedType.name;
+    }
     (state.sheetExtraCats || []).forEach(rememberCategory);
     openDb().then(function (db) {
       return idbPut(db, item).then(function () {
@@ -2418,7 +2645,7 @@
   function onNoteSubmit() {
     if (planeState === 'animating') return;
     if (planeState === 'confirming') { startFold(); return; }
-    if (!coverTypeById(state.coverType)) return; // 未选类型：维持原早退行为
+    if (!getCoverType(state.coverType)) return; // 未选类型：维持原早退行为
     // 折痕预演只在队列最后一张触发；非最后一张直接保存并切下一张
     if (!isLastNote()) { saveCurrentNote(false); return; }
     startFold();
@@ -2791,6 +3018,14 @@
     el.libraryRows = $('library-rows');
     el.libraryEmpty = $('library-empty');
     el.libScroll = $('lib-scroll');
+    el.libChipBar = $('lib-chip-bar');
+    el.btnLibCatAdd = $('btn-lib-cat-add');
+    el.catSheet = $('cat-sheet');
+    el.catSheetInput = $('cat-sheet-input');
+    el.catSheetMsg = $('cat-sheet-msg');
+    el.catSheetCancel = $('cat-sheet-cancel');
+    el.catSheetOk = $('cat-sheet-ok');
+    el.catSheetBackdrop = $('cat-sheet-backdrop');
     el.noteCatChips = $('note-cat-chips');
     el.fieldNewCat = $('field-new-cat');
     el.btnAddCat = $('btn-add-cat');
@@ -2879,6 +3114,26 @@
 
     renderCoverTypes();
     showNoteStep();
+
+    if (el.btnLibCatAdd) {
+      el.btnLibCatAdd.addEventListener('click', function () {
+        openCatSheet();
+      });
+    }
+    if (el.catSheetCancel) el.catSheetCancel.addEventListener('click', closeCatSheet);
+    if (el.catSheetBackdrop) el.catSheetBackdrop.addEventListener('click', closeCatSheet);
+    if (el.catSheetOk) el.catSheetOk.addEventListener('click', submitCatSheet);
+    if (el.catSheetInput) {
+      el.catSheetInput.addEventListener('input', function () {
+        if (el.catSheetMsg) el.catSheetMsg.textContent = '';
+      });
+      el.catSheetInput.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          submitCatSheet();
+        }
+      });
+    }
 
     if (el.sheetBackdrop) {
       el.sheetBackdrop.addEventListener('click', function () {
@@ -2989,6 +3244,10 @@
         return;
       }
       if (!el.libSheet || el.libSheet.hidden) {
+        if (el.catSheet && !el.catSheet.hidden) {
+          closeCatSheet();
+          return;
+        }
         if (state.viewerId) closeViewer();
         return;
       }
@@ -3122,6 +3381,7 @@
     bind();
     bindChromeMotion();
     setupFollowAuthor();
+    loadCustomCategories();
     showView('import');
     refreshLibrary().catch(function () {});
   }
