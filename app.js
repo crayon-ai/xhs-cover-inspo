@@ -2272,26 +2272,12 @@
     if (dy > 72) closeLibrarySheet();
   }
 
-  // ——— Fullscreen viewer + long-press action ring ———
-  // 点击库卡片进入全屏查看（纯图无文字）；长按 350ms 从按压点弹出
-  // 喜欢/导出/查看描述三个圆形按钮，按住拖动时按钮围绕手指重排，
-  // 离手指最近的按钮放大反色，松手在其上即触发。
+  // ——— Fullscreen viewer + 底部固定四钮横排 ———
+  // 点击库卡片进入全屏查看（纯图无文字）；顶栏返回/点空白关闭，
+  // 横滑切换；底部固定「喜欢/导出/查详情/删除」四钮 click 直接触发。
 
-  var LONGPRESS_MS = 350;
-  var RING_RADIUS = 86;    // 按压点到按钮中心距离
-  var RING_ARC = 44;       // 相邻按钮夹角（四钮扇形，间距略收防溢出）
-  var RING_SIZE = 48;      // 按钮直径
-  var RING_FOLLOW = 170;   // 手指滑出此半径后，操作环整体重新锚定到手指
-  var RING_TRIGGER_MAX = 170; // 松手时与选中按钮的最大距离，超过则视为取消
-
-  var viewerPress = null;  // {x,y,t,moved,long,timer,id}
-  var ringState = null;    // {px,py,hot,buttons,targets,tapPick}
+  var viewerPress = null;  // {x,y,t,moved,id,onBar}
   var toastTimer = 0;
-  var ringClickShieldUntil = 0; // resolve 后短暂吞掉合成 click，防幽灵点击误关查看器
-
-  function shieldGhostClick() {
-    ringClickShieldUntil = Date.now() + 420;
-  }
 
   var askShieldUntil = 0; // ask 开窗武装期：吞掉开窗瞬间落下的幽灵 click/pointerup/touchend
 
@@ -2313,49 +2299,16 @@
     return libraryItemById(state.viewerId);
   }
 
-  function svgIcon(kind) {
+  /** 圆润软心（2026-11-04 用户选定），随容器 currentColor 上色（库卡片角标用） */
+  function svgIcon() {
     var ns = 'http://www.w3.org/2000/svg';
     var svg = document.createElementNS(ns, 'svg');
-    if (kind === 'heart-fill') {
-      // 圆润软心（2026-11-04 用户选定），随容器 currentColor 上色
-      svg.setAttribute('viewBox', '0 0 24 24');
-      svg.setAttribute('aria-hidden', 'true');
-      var hf = document.createElementNS(ns, 'path');
-      hf.setAttribute('fill', 'currentColor');
-      hf.setAttribute('d', 'M12 20.7c-.42 0-.84-.15-1.17-.44C6.5 16.6 2.6 13.1 2.6 9.1 2.6 6.2 4.8 4.1 7.4 4.1c1.86 0 3.55 1.03 4.6 2.72 1.05-1.69 2.74-2.72 4.6-2.72 2.6 0 4.8 2.1 4.8 5 0 4-3.9 7.5-8.43 11.16-.33.29-.75.44-1.17.44z');
-      svg.appendChild(hf);
-      return svg;
-    }
-    if (kind === 'delete') {
-      // 珊红垃圾桶线性图标（参考 ring-delete-demo A 方案），随容器 currentColor 上色
-      svg.setAttribute('viewBox', '0 0 24 24');
-      svg.setAttribute('aria-hidden', 'true');
-      var td = document.createElementNS(ns, 'path');
-      td.setAttribute('fill', 'none');
-      td.setAttribute('stroke', 'currentColor');
-      td.setAttribute('stroke-width', '1.6');
-      td.setAttribute('stroke-linecap', 'round');
-      td.setAttribute('stroke-linejoin', 'round');
-      td.setAttribute('d', 'M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7m3 0l-.7 11.2A1.8 1.8 0 0 1 14.5 20h-5a1.8 1.8 0 0 1-1.8-1.8L7 7m3 4v5m4-5v5');
-      svg.appendChild(td);
-      return svg;
-    }
-    svg.setAttribute('viewBox', '0 0 20 20');
+    svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('aria-hidden', 'true');
-    var p = document.createElementNS(ns, 'path');
-    if (kind === 'like') {
-      p.setAttribute('d', 'M10 16.6S3.6 12.4 1.9 8.4C.9 6 2.4 3.4 5 3.4c1.9 0 3.4 1.1 5 3 1.6-1.9 3.1-3 5-3 2.6 0 4.1 2.6 3.1 5-1.7 4-8.1 8.2-8.1 8.2z');
-    } else if (kind === 'export') {
-      p.setAttribute('d', 'M10 12.3V3.6M6.4 7.2 10 3.6l3.6 3.6M4.6 12.5v3.1a1 1 0 0 0 1 1h8.8a1 1 0 0 0 1-1v-3.1');
-    } else {
-      p.setAttribute('d', 'M4.6 4.2h10.8c.7 0 1.2.5 1.2 1.2v6.2c0 .7-.5 1.2-1.2 1.2H9.4l-3.6 3v-3H4.6c-.7 0-1.2-.5-1.2-1.2V5.4c0-.7.5-1.2 1.2-1.2z');
-    }
-    p.setAttribute('fill', 'none');
-    p.setAttribute('stroke', 'currentColor');
-    p.setAttribute('stroke-width', '1.6');
-    p.setAttribute('stroke-linecap', 'round');
-    p.setAttribute('stroke-linejoin', 'round');
-    svg.appendChild(p);
+    var hf = document.createElementNS(ns, 'path');
+    hf.setAttribute('fill', 'currentColor');
+    hf.setAttribute('d', 'M12 20.7c-.42 0-.84-.15-1.17-.44C6.5 16.6 2.6 13.1 2.6 9.1 2.6 6.2 4.8 4.1 7.4 4.1c1.86 0 3.55 1.03 4.6 2.72 1.05-1.69 2.74-2.72 4.6-2.72 2.6 0 4.8 2.1 4.8 5 0 4-3.9 7.5-8.43 11.16-.33.29-.75.44-1.17.44z');
+    svg.appendChild(hf);
     return svg;
   }
 
@@ -2364,7 +2317,7 @@
     var vh = canvas.height;
     if (!vw || !vh) return null;
     var maxW = window.innerWidth * 0.88;
-    var maxH = window.innerHeight * 0.74;
+    var maxH = window.innerHeight * 0.62; // 给顶栏/底栏留空，封面不被遮挡
     var s = Math.min(maxW / vw, maxH / vh);
     return { w: Math.round(vw * s), h: Math.round(vh * s) };
   }
@@ -2389,14 +2342,14 @@
     });
   }
 
+  /** 底栏喜欢钮状态：已喜欢时心形填珊瑚红实心 */
   function syncViewerLike(item) {
-    if (el.viewerLike) el.viewerLike.hidden = !(item && item.liked);
+    if (el.viewerLike) el.viewerLike.classList.toggle('is-liked', !!(item && item.liked));
   }
 
   function openViewer(item, fromRect) {
     if (!el.imgViewer || !item || !item.imageBlob) return;
     hideTabs();
-    dismissRing();
     state.viewerId = item.id;
     var list = state.library || [];
     state.viewerIndex = list.indexOf(item);
@@ -2435,8 +2388,6 @@
 
   function closeViewer() {
     if (!state.viewerId || !el.imgViewer || el.imgViewer.hidden) return;
-    dismissRing();
-    if (viewerPress && viewerPress.timer) clearTimeout(viewerPress.timer);
     viewerPress = null;
     state.viewerId = null;
     el.imgViewer.classList.add('is-closing');
@@ -2461,60 +2412,7 @@
     syncViewerLike(item);
   }
 
-  // —— 操作环 ——
-
-  function buildRingButtons() {
-    el.actionRing.innerHTML = '';
-    var defs = [
-      { key: 'like', label: '喜欢' },
-      { key: 'export', label: '导出' },
-      { key: 'desc', label: '查看描述' },
-      { key: 'delete', label: '删除', cls: 'ring-btn--delete' }
-    ];
-    return defs.map(function (d) {
-      var b = document.createElement('span');
-      b.className = 'ring-btn' + (d.cls ? ' ' + d.cls : '');
-      b.setAttribute('role', 'button');
-      b.setAttribute('aria-label', d.label);
-      b.appendChild(svgIcon(d.key));
-      el.actionRing.appendChild(b);
-      return { key: d.key, el: b };
-    });
-  }
-
-  // 按压点在中下部时扇形朝上展开，在上部时朝下；方向在触发时锁定
-  function ringTargets(px, py, base) {
-    var m = RING_SIZE / 2 + 10;
-    var topM = 64;
-    var bottomM = m + 26;
-    var keys = ['like', 'export', 'desc', 'delete'];
-    return keys.map(function (key, i) {
-      // 四钮以中线对称展开：(i - 1.5) * RING_ARC
-      var ang = (base + (i - (keys.length - 1) / 2) * RING_ARC) * Math.PI / 180;
-      var x = px + Math.cos(ang) * RING_RADIUS;
-      var y = py + Math.sin(ang) * RING_RADIUS;
-      x = Math.min(window.innerWidth - m, Math.max(m, x));
-      y = Math.min(window.innerHeight - bottomM, Math.max(topM, y));
-      return { key: key, x: x, y: y };
-    });
-  }
-
-  function placeRing(targets, hotKey, entering) {
-    if (!ringState) return;
-    ringState.targets = targets;
-    targets.forEach(function (t, i) {
-      var b = ringState.buttons[i];
-      if (!b) return;
-      var s = hotKey === t.key ? 1.38 : 1;
-      b.el.style.transitionDelay = entering ? (i * 40) + 'ms' : '0ms';
-      b.el.style.opacity = '1';
-      b.el.style.transform =
-        'translate3d(' + (t.x - RING_SIZE / 2) + 'px,' + (t.y - RING_SIZE / 2) + 'px,0) scale(' + s + ')';
-      b.el.classList.toggle('is-hot', hotKey === t.key);
-      // 删除钮热态时其余钮压暗（A 方案：视觉聚焦珊红删除）
-      b.el.classList.toggle('is-dim', hotKey === 'delete' && hotKey !== t.key);
-    });
-  }
+  // —— 底栏四钮 ——
 
   /** 触感反馈：容器 vibrateShort(9.50+) 优先，网页/低版本回退 navigator.vibrate */
   function hapticTick() {
@@ -2528,141 +2426,17 @@
     try { if (navigator.vibrate) navigator.vibrate(12); } catch (e2) {}
   }
 
-  function fireRing(px, py) {
-    if (!el.actionRing || !state.viewerId) return;
+  /** 底栏按钮 click 分发：复用原操作环四动作，不改业务语义 */
+  function onViewerBarButton(action) {
+    if (!state.viewerId) return;
     hapticTick();
-    var base = py > window.innerHeight * 0.45 ? -90 : 90;
-    ringState = {
-      px: px,
-      py: py,
-      base: base,
-      anchorX: px,
-      anchorY: py,
-      hot: null,
-      buttons: buildRingButtons(),
-      targets: null
-    };
-    el.actionRing.hidden = false;
-    ringState.buttons.forEach(function (b, i) {
-      b.el.style.transitionDelay = (i * 40) + 'ms';
-      b.el.style.opacity = '0';
-      b.el.style.transform =
-        'translate3d(' + (px - RING_SIZE / 2) + 'px,' + (py - RING_SIZE / 2) + 'px,0) scale(0.2)';
-    });
-    var targets = ringTargets(px, py, base);
-    if (window.requestAnimationFrame) {
-      window.requestAnimationFrame(function () {
-        placeRing(targets, null, true);
-      });
-    } else {
-      placeRing(targets, null, true);
-    }
+    if (action === 'like') ringLike();
+    else if (action === 'export') ringExport();
+    else if (action === 'desc') ringDesc();
+    else if (action === 'delete') ringDelete();
   }
 
-  function updateRing(px, py) {
-    if (!ringState) return;
-    ringState.px = px;
-    ringState.py = py;
-    // 按钮以按压点为锚静止；手指滑远后整个环重新锚定到手指（方向不变）
-    var far = Math.hypot(px - ringState.anchorX, py - ringState.anchorY) > RING_FOLLOW;
-    if (far) {
-      ringState.anchorX = px;
-      ringState.anchorY = py;
-    }
-    var targets = ringTargets(ringState.anchorX, ringState.anchorY, ringState.base);
-    // 离手指最近的按钮即选中（任意时刻恰有一个高亮）
-    var hot = null;
-    var best = Infinity;
-    targets.forEach(function (t) {
-      var d = Math.hypot(t.x - px, t.y - py);
-      if (d < best) {
-        best = d;
-        hot = t.key;
-      }
-    });
-    ringState.hot = hot;
-    ringState.hotDist = best;
-    placeRing(targets, hot, false);
-  }
-
-  function dismissRing() {
-    if (!el.actionRing) return;
-    el.actionRing.classList.remove('is-tap-pick');
-    if (!ringState) {
-      el.actionRing.hidden = true;
-      return;
-    }
-    var buttons = ringState.buttons;
-    var targets = ringState.targets;
-    ringState = null;
-    buttons.forEach(function (b, i) {
-      var t = targets ? targets[i] : null;
-      b.el.style.transitionDelay = '0ms';
-      b.el.style.opacity = '0';
-      b.el.style.transform = t
-        ? 'translate3d(' + (t.x - RING_SIZE / 2) + 'px,' + (t.y - RING_SIZE / 2) + 'px,0) scale(0.35)'
-        : 'scale(0.35)';
-    });
-    setTimeout(function () {
-      if (!ringState && el.actionRing) {
-        el.actionRing.hidden = true;
-        el.actionRing.innerHTML = '';
-      }
-    }, 190);
-  }
-
-  function resolveRing(ev) {
-    var st = ringState;
-    if (!st) return;
-    if (st.tapPick) {
-      // 点选模式下在按钮之外松手：视为放弃，收环
-      dismissRing();
-      shieldGhostClick();
-      return;
-    }
-    var hot = st.hot;
-    var hotDist = st.hotDist;
-    // 触摸上松手时未选中任何按钮：保持环可见，切换为点选模式
-    if (!hot || hotDist > RING_TRIGGER_MAX) {
-      if (ev && ev.pointerType === 'touch') {
-        st.tapPick = true;
-        st.hot = null;
-        st.hotDist = Infinity;
-        el.actionRing.classList.add('is-tap-pick');
-        // 不能 shield：否则随后 420ms 内的点选 click 会被捕获拦截
-        return;
-      }
-      dismissRing();
-      // 手指离选中按钮过远时视为取消，避免误触
-      return;
-    }
-    dismissRing();
-    shieldGhostClick();
-    if (hot === 'like') ringLike();
-    else if (hot === 'export') ringExport();
-    else if (hot === 'desc') ringDesc();
-    else if (hot === 'delete') ringDelete();
-  }
-
-  // 点选模式：点某个环按钮直接执行该动作
-  function onRingButtonClick(ev) {
-    var btn = ev.target && ev.target.closest ? ev.target.closest('.ring-btn') : null;
-    if (!btn || !ringState || !ringState.tapPick) return;
-    ev.stopPropagation();
-    ev.preventDefault();
-    var key = null;
-    for (var i = 0; i < ringState.buttons.length; i++) {
-      if (ringState.buttons[i].el === btn) { key = ringState.buttons[i].key; break; }
-    }
-    dismissRing();
-    shieldGhostClick();
-    if (key === 'like') ringLike();
-    else if (key === 'export') ringExport();
-    else if (key === 'desc') ringDesc();
-    else if (key === 'delete') ringDelete();
-  }
-
-  // —— 三个动作 ——
+  // —— 四个动作 ——
 
   function ringLike() {
     var item = viewerItem();
@@ -2680,7 +2454,7 @@
     });
   }
 
-  /** 操作环第4钮：先 dismissRing（resolveRing 已收环），确认后删除当前查看的封面 */
+  /** 底栏删除钮：二次确认后才删当前查看的封面（取消保留） */
   function ringDelete() {
     var item = viewerItem();
     if (!item) return;
@@ -2706,7 +2480,6 @@
   }
 
   function ringExport() {
-    shieldGhostClick(); // 双保险：防 tap-pick/长按松手的合成 click 落进刚打开的 ask
     askConfirm('下载这张？', doRingExport);
   }
 
@@ -2875,47 +2648,33 @@
     }, 1100);
   }
 
-  // —— 查看器手势：点按关闭 / 横滑切换 / 长按呼出 ——
+  // —— 查看器手势：点空白关闭 / 横滑切换（顶栏/底栏交给 click，不参与手势） ——
 
   function onViewerPointerDown(ev) {
     if (!state.viewerId || !el.imgViewer || el.imgViewer.hidden) return;
-    if (el.ask && !el.ask.hidden) return; // ask 弹层打开期间暂停查看器手势，避免误关/拆环
-    if (ringState && ringState.tapPick) {
-      // 点选模式：点在环按钮上交给 click 处理；点空白处则收环
-      var btn = ev.target && ev.target.closest ? ev.target.closest('.ring-btn') : null;
-      if (btn) return;
-      dismissRing();
-      shieldGhostClick();
-      return;
-    }
+    if (el.ask && !el.ask.hidden) return; // ask 弹层打开期间暂停查看器手势，避免误关
     viewerPress = {
       x: ev.clientX,
       y: ev.clientY,
       t: Date.now(),
       moved: false,
       id: ev.pointerId,
-      timer: 0
+      // 起点在顶栏/底栏上：交给按钮 click，不关闭不切换
+      onBar: !!(ev.target && ev.target.closest &&
+        ev.target.closest('.viewer-bar, .viewer-topbar'))
     };
+    if (viewerPress.onBar) return; // 不抢 pointer capture，保证按钮正常 click
     if (el.imgViewer.setPointerCapture) {
       try { el.imgViewer.setPointerCapture(ev.pointerId); } catch (e) {}
     }
-    viewerPress.timer = setTimeout(function () {
-      if (!viewerPress || viewerPress.moved) return;
-      fireRing(viewerPress.x, viewerPress.y);
-    }, LONGPRESS_MS);
   }
 
   function onViewerPointerMove(ev) {
     if (!viewerPress || ev.pointerId !== viewerPress.id) return;
-    if (ringState) {
-      updateRing(ev.clientX, ev.clientY);
-      return;
-    }
     var dx = ev.clientX - viewerPress.x;
     var dy = ev.clientY - viewerPress.y;
     if (!viewerPress.moved && Math.hypot(dx, dy) > 10) {
       viewerPress.moved = true;
-      if (viewerPress.timer) clearTimeout(viewerPress.timer);
     }
   }
 
@@ -2924,14 +2683,10 @@
     if (el.ask && !el.ask.hidden) { viewerPress = null; return; } // ask 打开期间不动查看器状态
     var p = viewerPress;
     viewerPress = null;
-    if (p.timer) clearTimeout(p.timer);
-    if (ringState) {
-      resolveRing(ev);
-      return;
-    }
+    if (p.onBar) return; // 底栏/顶栏按钮 click 已自行处理
     var dx = ev.clientX - p.x;
     var dy = ev.clientY - p.y;
-    if (!p.moved && Date.now() - p.t < LONGPRESS_MS) {
+    if (!p.moved && Date.now() - p.t < 500) {
       closeViewer();
       return;
     }
@@ -2941,19 +2696,7 @@
   }
 
   function onViewerPointerCancel() {
-    // 触摸长按可能被系统接管而触发 pointercancel：
-    // 环已弹出时不能拆环，改为进入点选模式保留按钮
-    if (ringState) {
-      if (!ringState.tapPick) {
-        ringState.tapPick = true;
-        ringState.hot = null;
-        ringState.hotDist = Infinity;
-        el.actionRing.classList.add('is-tap-pick');
-      }
-    } else {
-      if (viewerPress && viewerPress.timer) clearTimeout(viewerPress.timer);
-    }
-    // cancel 后通常没有配套 pointerup，必须清掉长按状态避免误触
+    // cancel 后通常没有配套 pointerup，清掉按压状态避免误触
     viewerPress = null;
   }
 
@@ -3519,7 +3262,8 @@
     el.imgViewer = $('img-viewer');
     el.viewerCanvas = $('viewer-canvas');
     el.viewerLike = $('viewer-like');
-    el.actionRing = $('action-ring');
+    el.viewerBack = $('viewer-back');
+    el.viewerBar = $('viewer-bar');
     el.viewerToast = $('viewer-toast');
     el.btnLibManage = $('btn-lib-manage');
     el.typeSheet = $('type-sheet');
@@ -3695,9 +3439,9 @@
       }
       el.imgViewer.addEventListener('touchstart', function (ev) {
         if (!viewerVisible()) return;
-        // 点选模式下点环按钮需保留原生 click（preventDefault 会吞掉 click）
-        if (ringState && ringState.tapPick && ev.target &&
-            ev.target.closest && ev.target.closest('.ring-btn')) return;
+        // 顶栏/底栏按钮需保留原生 click（preventDefault 会吞掉 click）
+        if (ev.target && ev.target.closest &&
+            ev.target.closest('.viewer-bar, .viewer-topbar')) return;
         ev.preventDefault();
         ev.stopPropagation();
       }, { passive: false });
@@ -3707,27 +3451,26 @@
       el.imgViewer.addEventListener('dragstart', function (ev) {
         if (viewerVisible()) ev.preventDefault();
       });
-      // 环 resolve 后短暂吞掉随后的 click，防长按松手的幽灵点击误关查看器
-      el.imgViewer.addEventListener('click', function (ev) {
-        if (Date.now() < ringClickShieldUntil) {
-          // 点选模式下点击环按钮需正常冒泡到 onRingButtonClick，不拦截
-          if (ev.target && ev.target.closest && ev.target.closest('.ring-btn')) return;
-          ev.stopPropagation();
-          ev.preventDefault();
-        }
-      }, true);
     }
 
-    if (el.actionRing) {
-      el.actionRing.addEventListener('click', onRingButtonClick);
+    // 底栏四钮 + 顶栏返回：click 触发，无长按
+    if (el.viewerBar) {
+      el.viewerBar.addEventListener('click', function (ev) {
+        var btn = ev.target && ev.target.closest ? ev.target.closest('.viewer-bar__btn') : null;
+        if (!btn) return;
+        ev.stopPropagation();
+        onViewerBarButton(btn.getAttribute('data-action'));
+      });
+    }
+    if (el.viewerBack) {
+      el.viewerBack.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        closeViewer();
+      });
     }
 
     document.addEventListener('keydown', function (ev) {
       if (ev.key !== 'Escape') return;
-      if (ringState) {
-        dismissRing();
-        return;
-      }
       if (!el.libSheet || el.libSheet.hidden) {
         if (el.catSheet && !el.catSheet.hidden) {
           closeCatSheet();
