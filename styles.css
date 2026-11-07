@@ -2773,7 +2773,9 @@ html.is-note body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 16px 12px;
+  /* 方案A整体下移：预留安全顶距避开小红书原生顶栏「转发/关注」（冲突区约44–56px）。
+     #app.is-library 已吃 safe-area，这里只加固定 52px，避免双重累加。 */
+  padding: 52px 16px 12px;
   overflow-x: auto;
   scrollbar-width: none;
 }
