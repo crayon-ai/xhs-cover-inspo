@@ -1465,32 +1465,32 @@
     {
       id: 'result',
       name: '结果展示型',
-      a: { key: 'coreResult', label: '核心结果', ph: '3个月瘦20斤、0粉→10万粉' },
-      b: { key: 'evidence', label: '证据形式', ph: '前后对比照 / 后台数据截图 / 收益图' }
+      a: { key: 'coreResult', label: '核心结果', ph: '' },
+      b: { key: 'evidence', label: '证据形式', ph: '' }
     },
     {
       id: 'emotion',
       name: '情绪共鸣型',
-      a: { key: 'emotion', label: '主打情绪', ph: '破防——成年人的崩溃是静音的' },
-      b: { key: 'hook', label: '戳人手法', ph: '第一人称独白 / 反问句 / 深夜氛围' }
+      a: { key: 'emotion', label: '主打情绪', ph: '' },
+      b: { key: 'hook', label: '戳人手法', ph: '' }
     },
     {
       id: 'identity',
       name: '身份认同型',
-      a: { key: 'audience', label: '锁定人群', ph: '30+裸辞的打工人、考研二战的人' },
-      b: { key: 'identityDetail', label: '对号入座细节', ph: '周报、挤地铁、体检报告' }
+      a: { key: 'audience', label: '锁定人群', ph: '' },
+      b: { key: 'identityDetail', label: '对号入座细节', ph: '' }
     },
     {
       id: 'contrast',
       name: '认知反差型',
-      a: { key: 'contrast', label: '认知反差', ph: '以为多喝水养胃 / 其实喝太多伤肾' },
-      b: { key: 'support', label: '反差支撑', ph: '专业身份 / 具体数据 / 亲身经历' }
+      a: { key: 'contrast', label: '认知反差', ph: '' },
+      b: { key: 'support', label: '反差支撑', ph: '' }
     },
     {
       id: 'info',
       name: '信息差干货型',
-      a: { key: 'benefit', label: '具体好处', ph: '5个免费去水印工具、1个排版公式' },
-      b: { key: 'gap', label: '信息差点', ph: '小众渠道 / 内部规则 / 没人整理过' }
+      a: { key: 'benefit', label: '具体好处', ph: '' },
+      b: { key: 'gap', label: '信息差点', ph: '' }
     }
   ];
 
@@ -1546,8 +1546,8 @@
     if (hideAB) return; // 自建无 a/b，勿读 chosen.a/b
     if (el.fieldALabel) el.fieldALabel.textContent = chosen.a.label;
     if (el.fieldBLabel) el.fieldBLabel.textContent = chosen.b.label;
-    if (el.fieldA) el.fieldA.placeholder = chosen.a.ph;
-    if (el.fieldB) el.fieldB.placeholder = chosen.b.ph;
+    if (el.fieldA) el.fieldA.placeholder = '';
+    if (el.fieldB) el.fieldB.placeholder = '';
   }
 
   function chooseCoverType(id) {
