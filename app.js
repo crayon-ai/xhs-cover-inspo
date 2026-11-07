@@ -1349,13 +1349,17 @@
     if (el.noteType) el.noteType.hidden = !!chosen;
     if (el.noteForm) el.noteForm.hidden = !chosen;
     if (el.btnNoteSkipType) el.btnNoteSkipType.hidden = !!chosen;
-    // 自建类型只有三共用字段：隐藏 field-a / field-b 两个 label 容器（先恢复，防残留）
+    // 自建类型只有三共用字段：隐藏 field-a / field-b 两个 label 容器
     var hideAB = !!(chosen && chosen.custom);
     if (el.fieldA && el.fieldA.parentNode) el.fieldA.parentNode.hidden = hideAB;
     if (el.fieldB && el.fieldB.parentNode) el.fieldB.parentNode.hidden = hideAB;
     if (!chosen) return;
-    if (hideAB) return;
+    if (el.btnTypeBack) el.btnTypeBack.textContent = chosen.name;
+    if (hideAB) return; // 自建无 a/b，勿读 chosen.a/b
     if (el.fieldALabel) el.fieldALabel.textContent = chosen.a.label;
+    if (el.fieldBLabel) el.fieldBLabel.textContent = chosen.b.label;
+    if (el.fieldA) el.fieldA.placeholder = chosen.a.ph;
+    if (el.fieldB) el.fieldB.placeholder = chosen.b.ph;
   }
 
   function chooseCoverType(id) {
