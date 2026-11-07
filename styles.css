@@ -2895,3 +2895,121 @@ html.is-note body {
   padding: 5px 14px;
   font-size: 13px;
 }
+
+/* —— 全屏操作环 · 第4钮「删除」（A 方案：白底珊红 trash，热态珊红实底） —— */
+.ring-btn--delete {
+  color: var(--coral); /* 闲态：白底 + 珊红垃圾桶线性图标 */
+}
+
+.ring-btn--delete.is-hot {
+  background: var(--coral); /* 热态：珊红实底 #E2483D + 白图标（scale 1.38 由 placeRing 控制） */
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(226, 72, 61, 0.42);
+}
+
+/* 删除钮热态时其余钮压暗，聚焦珊红 */
+.ring-btn.is-dim {
+  opacity: 0.45;
+}
+
+/* —— 灵感库 · 「管理类型」极简文字入口（库顶筛选条右侧，不挤占封面区） —— */
+.lib-stage { position: relative; }
+
+.lib-manage {
+  position: absolute;
+  top: 6px;
+  right: 16px;
+  z-index: 2;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: rgba(26, 26, 26, 0.55);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.lib-manage:active { transform: scale(0.95); }
+.lib-manage:focus-visible {
+  outline: 2px solid rgba(26, 26, 26, 0.55);
+  outline-offset: 2px;
+}
+
+/* —— 管理类型面板（复用 cat-sheet 弹层骨架） —— */
+.type-sheet__panel { max-height: 76vh; display: flex; flex-direction: column; }
+
+.type-sheet__hint {
+  margin: -6px 2px 12px;
+  font-size: 12px;
+  color: rgba(26, 26, 26, 0.45);
+}
+
+.type-sheet__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.type-sheet__list > * + * { margin-top: 10px; }
+.supports-flex-gap .type-sheet__list > * + * { margin-top: 0; }
+.supports-flex-gap .type-sheet__list { gap: 10px; }
+
+.type-sheet__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.type-sheet__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.type-sheet__body b {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.type-sheet__body small {
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(26, 26, 26, 0.45);
+}
+
+.type-sheet__del {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(226, 72, 61, 0.4);
+  background: #ffffff;
+  color: var(--coral);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 140ms var(--ease-out);
+}
+.type-sheet__del:active { transform: scale(0.94); }
+
+.type-sheet__empty {
+  margin: 20px 2px;
+  text-align: center;
+  font-size: 13px;
+  color: rgba(26, 26, 26, 0.4);
+}
+
+.type-sheet__done { flex: 1; }
+
+/* —— 确认弹层副文案（删除类型时说明封面保留） —— */
+.ask-sub {
+  margin: 8px 2px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(26, 26, 26, 0.55);
+}

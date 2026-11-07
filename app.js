@@ -41,6 +41,8 @@
     coverType: '',
     extraCategories: [],
     customCategories: [],
+    deletedDefaults: [],   // 已删除默认类型 id（result/emotion/...），持久化防复活
+    deletedCustoms: [],    // 已删自建分类名（normalize 后），防扫库同名补回
     libFilter: 'all',
     sheetId: null,
     sheetBase: null,
@@ -153,8 +155,10 @@
   function persistCustomCategories() {
     try {
       localStorage.setItem(CATS_KEY, JSON.stringify({
-        version: 1,
+        version: 2,
         customs: state.customCategories || [],
+        deletedDefaults: state.deletedDefaults || [],
+        deletedCustoms: state.deletedCustoms || [],
         filter: state.libFilter || 'all'
       }));
     } catch (e) {
@@ -168,12 +172,19 @@
       var raw = localStorage.getItem(CATS_KEY);
       if (raw) {
         var data = JSON.parse(raw);
-        if (data && data.version === 1 && Array.isArray(data.customs)) {
+        // version 1 旧格式无删除记录；version 2 起带 deletedDefaults/deletedCustoms
+        if (data && (data.version === 1 || data.version === 2) && Array.isArray(data.customs)) {
           state.customCategories = data.customs.filter(function (c) {
             return c && c.name;
           }).map(function (c) {
             return { id: String(c.id || 'custom_' + uid()), name: String(c.name), createdAt: Number(c.createdAt) || 0 };
           });
+        }
+        if (data && Array.isArray(data.deletedDefaults)) {
+          state.deletedDefaults = data.deletedDefaults.map(function (id) { return String(id); });
+        }
+        if (data && Array.isArray(data.deletedCustoms)) {
+          state.deletedCustoms = data.deletedCustoms.map(function (n) { return String(n); });
         }
         state.libFilter = typeof data.filter === 'string' && data.filter ? data.filter : 'all';
       }
@@ -194,6 +205,10 @@
       if (removed) state.customCategories = kept;
     }
     syncExtraCategories();
+    // 刷新后筛选不得是被删类型名：回落到「全部」
+    if (state.libFilter && state.libFilter !== 'all' && isDeletedCategoryName(state.libFilter)) {
+      state.libFilter = 'all';
+    }
     if (removed) persistCustomCategories();
   }
 
@@ -215,6 +230,56 @@
     return null;
   }
 
+  /** 该默认类型 id 是否已被用户删除（管理类型面板里删掉的不再出现/补录） */
+  function isDeletedDefault(id) {
+    return (state.deletedDefaults || []).indexOf(String(id)) !== -1;
+  }
+
+  /** 该分类名是否是被删默认类型名或已删自建名：均不得再进入任何类型列表 */
+  function isDeletedCategoryName(name) {
+    var norm = normalizeCategoryName(name);
+    if (!norm) return false;
+    for (var i = 0; i < COVER_TYPES.length; i++) {
+      if (COVER_TYPES[i].id && isDeletedDefault(COVER_TYPES[i].id) &&
+          normalizeCategoryName(COVER_TYPES[i].name) === norm) return true;
+    }
+    return (state.deletedCustoms || []).indexOf(norm) !== -1;
+  }
+
+  /** 删除类型：默认按 id 记入 deletedDefaults；自建按 normalize 名记入 deletedCustoms。
+   *  只删类型，绝不动 IndexedDB 封面。 */
+  function deleteCoverType(id) {
+    var def = null;
+    for (var i = 0; i < COVER_TYPES.length; i++) {
+      if (COVER_TYPES[i].id === id) def = COVER_TYPES[i];
+    }
+    if (def) {
+      if ((state.deletedDefaults || []).indexOf(id) === -1) state.deletedDefaults.push(id);
+    } else {
+      var custom = null;
+      var list = state.customCategories || [];
+      for (var j = 0; j < list.length; j++) {
+        if (list[j].id === id) custom = list[j];
+      }
+      if (!custom) return;
+      var norm = normalizeCategoryName(custom.name);
+      if (norm && (state.deletedCustoms || []).indexOf(norm) === -1) state.deletedCustoms.push(norm);
+      state.customCategories = list.filter(function (c) { return c.id !== id; });
+    }
+    // 当前筛选正好是被删类型名：回落到「全部」
+    if (state.libFilter && state.libFilter !== 'all' &&
+        (def ? state.libFilter === def.name : state.libFilter === custom.name)) {
+      state.libFilter = 'all';
+    }
+    syncExtraCategories();
+    persistCustomCategories();
+    if (state.coverType === id) clearCoverType();
+    renderLibrary();
+    renderNoteCategories();
+    renderCoverTypes();
+    renderTypeSheet();
+  }
+
   /** 兼容「历史里已有但未入 customs 的分类名」：扫库补录，绝不清空 library */
   function syncCustomCategoriesFromLibrary() {
     var seen = {};
@@ -226,6 +291,7 @@
     var defaults = defaultTypeNames();
     Object.keys(seen).forEach(function (name) {
       if (defaults[normalizeCategoryName(name)]) return; // 默认类型名不补录
+      if (isDeletedCategoryName(name)) return; // 已删默认/自建：封面仍在库，但类型不复活
       rememberCategory(name);
       if (!findCustomByName(name)) {
         state.customCategories.push({ id: 'custom_' + uid(), name: name, createdAt: Date.now() });
@@ -1240,10 +1306,11 @@
     }
   ];
 
-  /** 默认五类命中；否则查自建分类，合成同构 type（表单字段沿用结果展示型），保证能填能存 */
+  /** 默认五类命中；否则查自建分类，合成 custom type（只有三共用字段，无 a/b）。
+   *  已删除的默认/自建类型一律返回 null（不出现、不可选）。 */
   function getCoverType(id) {
     for (var i = 0; i < COVER_TYPES.length; i++) {
-      if (COVER_TYPES[i].id === id) return COVER_TYPES[i];
+      if (COVER_TYPES[i].id === id && !isDeletedDefault(COVER_TYPES[i].id)) return COVER_TYPES[i];
     }
     var list = state.customCategories || [];
     for (var j = 0; j < list.length; j++) {
@@ -1251,9 +1318,7 @@
         return {
           id: id,
           name: list[j].name,
-          custom: true,
-          a: { key: 'coreResult', label: '核心结果', ph: '…' },
-          b: { key: 'evidence', label: '证据形式', ph: '…' }
+          custom: true
         };
       }
     }
@@ -1263,7 +1328,9 @@
   function renderCoverTypes() {
     if (!el.noteTypeList) return;
     el.noteTypeList.innerHTML = '';
-    COVER_TYPES.concat(state.customCategories || []).forEach(function (type) {
+    COVER_TYPES.filter(function (t) {
+      return !isDeletedDefault(t.id); // 已删默认类不进录入可选类型
+    }).concat(state.customCategories || []).forEach(function (type) {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'note-type__btn' + (state.coverType === type.id ? ' is-on' : '');
@@ -1282,12 +1349,13 @@
     if (el.noteType) el.noteType.hidden = !!chosen;
     if (el.noteForm) el.noteForm.hidden = !chosen;
     if (el.btnNoteSkipType) el.btnNoteSkipType.hidden = !!chosen;
+    // 自建类型只有三共用字段：隐藏 field-a / field-b 两个 label 容器（先恢复，防残留）
+    var hideAB = !!(chosen && chosen.custom);
+    if (el.fieldA && el.fieldA.parentNode) el.fieldA.parentNode.hidden = hideAB;
+    if (el.fieldB && el.fieldB.parentNode) el.fieldB.parentNode.hidden = hideAB;
     if (!chosen) return;
+    if (hideAB) return;
     if (el.fieldALabel) el.fieldALabel.textContent = chosen.a.label;
-    if (el.fieldBLabel) el.fieldBLabel.textContent = chosen.b.label;
-    if (el.fieldA) el.fieldA.placeholder = chosen.a.ph;
-    if (el.fieldB) el.fieldB.placeholder = chosen.b.ph;
-    if (el.btnTypeBack) el.btnTypeBack.textContent = chosen.name;
   }
 
   function chooseCoverType(id) {
@@ -1375,8 +1443,11 @@
         liked: false,
         createdAt: Date.now()
       };
-      record[type.a.key] = el.fieldA ? (el.fieldA.value || '').trim() : '';
-      record[type.b.key] = el.fieldB ? (el.fieldB.value || '').trim() : '';
+      // 自建类型不写 a/b 字段；默认五类照常写入各自的两个字段
+      if (!type.custom) {
+        record[type.a.key] = el.fieldA ? (el.fieldA.value || '').trim() : '';
+        record[type.b.key] = el.fieldB ? (el.fieldB.value || '').trim() : '';
+      }
       try {
         var db = await openDb();
         await idbPut(db, record);
@@ -1514,7 +1585,7 @@
       if (includeEmpty && name && counts[name] == null) counts[name] = 0;
     });
     return Object.keys(counts).filter(function (name) {
-      return name && name !== UNCATEGORIZED;
+      return name && name !== UNCATEGORIZED && !isDeletedCategoryName(name);
     }).sort(function (a, b) {
       if (counts[b] !== counts[a]) return counts[b] - counts[a];
       return a < b ? -1 : a > b ? 1 : 0;
@@ -1538,6 +1609,7 @@
 
   function rememberCategory(name) {
     if (!name) return;
+    if (isDeletedCategoryName(name)) return; // 已删类型名不再补回
     if (state.extraCategories.indexOf(name) === -1) state.extraCategories.push(name);
   }
 
@@ -1643,10 +1715,12 @@
   function libFilterNames() {
     var names = ['全部'];
     COVER_TYPES.forEach(function (t) {
+      if (isDeletedDefault(t.id)) return; // 已删默认类不出现在筛选条
       if (names.indexOf(t.name) === -1) names.push(t.name);
     });
     (state.customCategories || []).forEach(function (c) {
-      if (c.name && names.indexOf(c.name) === -1) names.push(c.name);
+      if (!c.name || isDeletedCategoryName(c.name)) return;
+      if (names.indexOf(c.name) === -1) names.push(c.name);
     });
     return names;
   }
@@ -1723,6 +1797,10 @@
       return;
     }
     // 与默认类型或已有自定义重名（忽略多余空白）：关闭并选中已有
+    if (isDeletedCategoryName(name)) {
+      if (el.catSheetMsg) el.catSheetMsg.textContent = '「' + name + '」已在管理类型里删除，换个名字吧';
+      return;
+    }
     var existing = null;
     COVER_TYPES.forEach(function (t) {
       if (!existing && normalizeCategoryName(t.name) === name) existing = t.name;
@@ -1747,6 +1825,65 @@
     persistCustomCategories();
     closeCatSheet();
     renderLibrary();
+  }
+
+  // —— 管理类型面板（type-sheet）：默认五类 + 自建均可删，只删类型不删封面 ——
+
+  function openTypeSheet() {
+    if (!el.typeSheet) return;
+    renderTypeSheet();
+    el.typeSheet.hidden = false;
+  }
+
+  function closeTypeSheet() {
+    if (!el.typeSheet) return;
+    el.typeSheet.hidden = true;
+  }
+
+  function renderTypeSheet() {
+    if (!el.typeSheetList) return;
+    el.typeSheetList.innerHTML = '';
+    var counts = categoryCounts();
+    var rows = [];
+    COVER_TYPES.forEach(function (t) {
+      if (!isDeletedDefault(t.id)) rows.push({ id: t.id, name: t.name, kind: '默认', count: counts[t.name] || 0 });
+    });
+    (state.customCategories || []).forEach(function (c) {
+      if (!isDeletedCategoryName(c.name)) rows.push({ id: c.id, name: c.name, kind: '自建', count: counts[c.name] || 0 });
+    });
+    if (!rows.length) {
+      var p = document.createElement('p');
+      p.className = 'type-sheet__empty';
+      p.textContent = '暂无类型';
+      el.typeSheetList.appendChild(p);
+      return;
+    }
+    rows.forEach(function (r) {
+      var row = document.createElement('div');
+      row.className = 'type-sheet__row';
+      var body = document.createElement('div');
+      body.className = 'type-sheet__body';
+      var name = document.createElement('b');
+      name.textContent = r.name;
+      var meta = document.createElement('small');
+      meta.textContent = r.kind + ' · ' + r.count + ' 张';
+      body.appendChild(name);
+      body.appendChild(meta);
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'type-sheet__del';
+      del.textContent = '删除';
+      del.addEventListener('click', function () {
+        askConfirm(
+          '删除类型「' + r.name + '」？',
+          function () { deleteCoverType(r.id); },
+          '类型删除后：封面不会删除，自动保留在「最近收藏」；之后可重新分类。'
+        );
+      });
+      row.appendChild(body);
+      row.appendChild(del);
+      el.typeSheetList.appendChild(row);
+    });
   }
 
   function buildLibRow(sec) {
@@ -1890,7 +2027,7 @@
       whyClick: String((item && item.whyClick) || ''),
       extra: legacyExtra(item)
     };
-    if (type) {
+    if (type && !type.custom) {
       snap[type.a.key] = String(item[type.a.key] || '');
       snap[type.b.key] = String(item[type.b.key] || '');
     }
@@ -2015,7 +2152,7 @@
     if (type) sheetAddType(el.sheetFields, type.name);
     sheetAddEditor(el.sheetFields, '封面主文案', 'headline');
     sheetAddEditor(el.sheetFields, '为什么想点', 'whyClick');
-    if (type) {
+    if (type && !type.custom) {
       sheetAddEditor(el.sheetFields, type.a.label, type.a.key);
       sheetAddEditor(el.sheetFields, type.b.label, type.b.key);
     }
@@ -2138,7 +2275,7 @@
 
   var LONGPRESS_MS = 350;
   var RING_RADIUS = 86;    // 按压点到按钮中心距离
-  var RING_ARC = 50;       // 相邻按钮夹角
+  var RING_ARC = 44;       // 相邻按钮夹角（四钮扇形，间距略收防溢出）
   var RING_SIZE = 48;      // 按钮直径
   var RING_FOLLOW = 170;   // 手指滑出此半径后，操作环整体重新锚定到手指
   var RING_TRIGGER_MAX = 170; // 松手时与选中按钮的最大距离，超过则视为取消
@@ -2183,6 +2320,20 @@
       hf.setAttribute('fill', 'currentColor');
       hf.setAttribute('d', 'M12 20.7c-.42 0-.84-.15-1.17-.44C6.5 16.6 2.6 13.1 2.6 9.1 2.6 6.2 4.8 4.1 7.4 4.1c1.86 0 3.55 1.03 4.6 2.72 1.05-1.69 2.74-2.72 4.6-2.72 2.6 0 4.8 2.1 4.8 5 0 4-3.9 7.5-8.43 11.16-.33.29-.75.44-1.17.44z');
       svg.appendChild(hf);
+      return svg;
+    }
+    if (kind === 'delete') {
+      // 珊红垃圾桶线性图标（参考 ring-delete-demo A 方案），随容器 currentColor 上色
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('aria-hidden', 'true');
+      var td = document.createElementNS(ns, 'path');
+      td.setAttribute('fill', 'none');
+      td.setAttribute('stroke', 'currentColor');
+      td.setAttribute('stroke-width', '1.6');
+      td.setAttribute('stroke-linecap', 'round');
+      td.setAttribute('stroke-linejoin', 'round');
+      td.setAttribute('d', 'M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7m3 0l-.7 11.2A1.8 1.8 0 0 1 14.5 20h-5a1.8 1.8 0 0 1-1.8-1.8L7 7m3 4v5m4-5v5');
+      svg.appendChild(td);
       return svg;
     }
     svg.setAttribute('viewBox', '0 0 20 20');
@@ -2313,11 +2464,12 @@
     var defs = [
       { key: 'like', label: '喜欢' },
       { key: 'export', label: '导出' },
-      { key: 'desc', label: '查看描述' }
+      { key: 'desc', label: '查看描述' },
+      { key: 'delete', label: '删除', cls: 'ring-btn--delete' }
     ];
     return defs.map(function (d) {
       var b = document.createElement('span');
-      b.className = 'ring-btn';
+      b.className = 'ring-btn' + (d.cls ? ' ' + d.cls : '');
       b.setAttribute('role', 'button');
       b.setAttribute('aria-label', d.label);
       b.appendChild(svgIcon(d.key));
@@ -2331,9 +2483,10 @@
     var m = RING_SIZE / 2 + 10;
     var topM = 64;
     var bottomM = m + 26;
-    var keys = ['like', 'export', 'desc'];
+    var keys = ['like', 'export', 'desc', 'delete'];
     return keys.map(function (key, i) {
-      var ang = (base + (i - 1) * RING_ARC) * Math.PI / 180;
+      // 四钮以中线对称展开：(i - 1.5) * RING_ARC
+      var ang = (base + (i - (keys.length - 1) / 2) * RING_ARC) * Math.PI / 180;
       var x = px + Math.cos(ang) * RING_RADIUS;
       var y = py + Math.sin(ang) * RING_RADIUS;
       x = Math.min(window.innerWidth - m, Math.max(m, x));
@@ -2354,6 +2507,8 @@
       b.el.style.transform =
         'translate3d(' + (t.x - RING_SIZE / 2) + 'px,' + (t.y - RING_SIZE / 2) + 'px,0) scale(' + s + ')';
       b.el.classList.toggle('is-hot', hotKey === t.key);
+      // 删除钮热态时其余钮压暗（A 方案：视觉聚焦珊红删除）
+      b.el.classList.toggle('is-dim', hotKey === 'delete' && hotKey !== t.key);
     });
   }
 
@@ -2482,6 +2637,7 @@
     if (hot === 'like') ringLike();
     else if (hot === 'export') ringExport();
     else if (hot === 'desc') ringDesc();
+    else if (hot === 'delete') ringDelete();
   }
 
   // 点选模式：点某个环按钮直接执行该动作
@@ -2499,6 +2655,7 @@
     if (key === 'like') ringLike();
     else if (key === 'export') ringExport();
     else if (key === 'desc') ringDesc();
+    else if (key === 'delete') ringDelete();
   }
 
   // —— 三个动作 ——
@@ -2516,6 +2673,24 @@
       syncViewerLike(item);
       renderLibrary();
       alert('保存失败');
+    });
+  }
+
+  /** 操作环第4钮：先 dismissRing（resolveRing 已收环），确认后删除当前查看的封面 */
+  function ringDelete() {
+    var item = viewerItem();
+    if (!item) return;
+    askConfirm('确定删除这张？', function () {
+      var id = item.id;
+      openDb().then(function (db) {
+        return idbDelete(db, id).then(function () {
+          db.close();
+          closeViewer();
+          return refreshLibrary();
+        });
+      }).catch(function () {
+        alert('删除失败');
+      });
     });
   }
 
@@ -3282,6 +3457,7 @@
     el.tabs = $('tabs');
     el.ask = $('ask');
     el.askText = $('ask-text');
+    el.askSub = $('ask-sub');
     el.askCancel = $('ask-cancel');
     el.askOk = $('ask-ok');
     el.askBackdrop = $('ask-backdrop');
@@ -3341,6 +3517,11 @@
     el.viewerLike = $('viewer-like');
     el.actionRing = $('action-ring');
     el.viewerToast = $('viewer-toast');
+    el.btnLibManage = $('btn-lib-manage');
+    el.typeSheet = $('type-sheet');
+    el.typeSheetList = $('type-sheet-list');
+    el.typeSheetClose = $('type-sheet-close');
+    el.typeSheetBackdrop = $('type-sheet-backdrop');
 
     qsAll('.tab').forEach(function (tab) {
       tab.addEventListener('click', function () {
@@ -3413,6 +3594,13 @@
         openCatSheet();
       });
     }
+    if (el.btnLibManage) {
+      el.btnLibManage.addEventListener('click', function () {
+        openTypeSheet();
+      });
+    }
+    if (el.typeSheetClose) el.typeSheetClose.addEventListener('click', closeTypeSheet);
+    if (el.typeSheetBackdrop) el.typeSheetBackdrop.addEventListener('click', closeTypeSheet);
     if (el.catSheetCancel) el.catSheetCancel.addEventListener('click', closeCatSheet);
     if (el.catSheetBackdrop) el.catSheetBackdrop.addEventListener('click', closeCatSheet);
     if (el.catSheetOk) el.catSheetOk.addEventListener('click', submitCatSheet);
@@ -3541,6 +3729,10 @@
           closeCatSheet();
           return;
         }
+        if (el.typeSheet && !el.typeSheet.hidden) {
+          closeTypeSheet();
+          return;
+        }
         if (state.viewerId) closeViewer();
         return;
       }
@@ -3609,16 +3801,30 @@
     el.tabs.hidden = true;
   }
 
-  function askConfirm(message, onOk) {
+  /** message 主文案；detail 可选副文案（删除类型时说明封面保留） */
+  function askConfirm(message, onOk, detail) {
     if (!el.ask) return;
     askHandler = onOk;
     if (el.askText) el.askText.textContent = message;
+    if (el.askSub) {
+      if (detail) {
+        el.askSub.textContent = detail;
+        el.askSub.hidden = false;
+      } else {
+        el.askSub.textContent = '';
+        el.askSub.hidden = true;
+      }
+    }
     el.ask.hidden = false;
     armAskShield();
   }
 
   function closeAsk() {
     askHandler = null;
+    if (el.askSub) {
+      el.askSub.textContent = '';
+      el.askSub.hidden = true;
+    }
     if (el.ask) el.ask.hidden = true;
   }
 
