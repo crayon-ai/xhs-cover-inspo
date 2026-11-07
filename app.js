@@ -1462,40 +1462,16 @@
   }
 
   var COVER_TYPES = [
-    {
-      id: 'result',
-      name: '结果展示型',
-      a: { key: 'coreResult', label: '核心结果', ph: '' },
-      b: { key: 'evidence', label: '证据形式', ph: '' }
-    },
-    {
-      id: 'emotion',
-      name: '情绪共鸣型',
-      a: { key: 'emotion', label: '主打情绪', ph: '' },
-      b: { key: 'hook', label: '戳人手法', ph: '' }
-    },
-    {
-      id: 'identity',
-      name: '身份认同型',
-      a: { key: 'audience', label: '锁定人群', ph: '' },
-      b: { key: 'identityDetail', label: '对号入座细节', ph: '' }
-    },
-    {
-      id: 'contrast',
-      name: '认知反差型',
-      a: { key: 'contrast', label: '认知反差', ph: '' },
-      b: { key: 'support', label: '反差支撑', ph: '' }
-    },
-    {
-      id: 'info',
-      name: '信息差干货型',
-      a: { key: 'benefit', label: '具体好处', ph: '' },
-      b: { key: 'gap', label: '信息差点', ph: '' }
-    }
+    { id: 'result', name: '结果展示型' },
+    { id: 'emotion', name: '情绪共鸣型' },
+    { id: 'identity', name: '身份认同型' },
+    { id: 'contrast', name: '认知反差型' },
+    { id: 'info', name: '信息差干货型' }
   ];
 
-  /** 默认五类命中；否则查自建分类，合成 custom type（只有三共用字段，无 a/b）。
-   *  已删除的默认/自建类型一律返回 null（不出现、不可选）。 */
+  /** 默认五类命中；否则查自建分类，合成 custom type。
+   *  已删除的默认/自建类型一律返回 null（不出现、不可选）。
+   *  录入/详情统一仅两字段：headline + whyClick。 */
   function getCoverType(id) {
     for (var i = 0; i < COVER_TYPES.length; i++) {
       if (COVER_TYPES[i].id === id && !isDeletedDefault(COVER_TYPES[i].id)) return COVER_TYPES[i];
@@ -1537,25 +1513,12 @@
     if (el.noteType) el.noteType.hidden = !!chosen;
     if (el.noteForm) el.noteForm.hidden = !chosen;
     if (el.btnNoteSkipType) el.btnNoteSkipType.hidden = !!chosen;
-    // 自建类型只有三共用字段：隐藏 field-a / field-b 两个 label 容器
-    var hideAB = !!(chosen && chosen.custom);
-    if (el.fieldA && el.fieldA.parentNode) el.fieldA.parentNode.hidden = hideAB;
-    if (el.fieldB && el.fieldB.parentNode) el.fieldB.parentNode.hidden = hideAB;
     if (!chosen) return;
     if (el.btnTypeBack) el.btnTypeBack.textContent = chosen.name;
-    if (hideAB) return; // 自建无 a/b，勿读 chosen.a/b
-    if (el.fieldALabel) el.fieldALabel.textContent = chosen.a.label;
-    if (el.fieldBLabel) el.fieldBLabel.textContent = chosen.b.label;
-    if (el.fieldA) el.fieldA.placeholder = '';
-    if (el.fieldB) el.fieldB.placeholder = '';
   }
 
   function chooseCoverType(id) {
     if (!getCoverType(id)) return;
-    if (state.coverType !== id) {
-      if (el.fieldA) el.fieldA.value = '';
-      if (el.fieldB) el.fieldB.value = '';
-    }
     state.coverType = id;
     renderCoverTypes();
     showNoteStep();
@@ -1564,8 +1527,6 @@
 
   function clearCoverType() {
     state.coverType = '';
-    if (el.fieldA) el.fieldA.value = '';
-    if (el.fieldB) el.fieldB.value = '';
     renderCoverTypes();
     showNoteStep();
     if (window.scrollTo) window.scrollTo(0, 0);
@@ -1597,10 +1558,7 @@
       (state.noteIndex + 1) + ' / ' + state.noteQueue.length;
     state.coverType = '';
     if (el.fieldHeadline) el.fieldHeadline.value = '';
-    el.fieldWhy.value = '';
-    if (el.fieldA) el.fieldA.value = '';
-    if (el.fieldB) el.fieldB.value = '';
-    if (el.fieldExtra) el.fieldExtra.value = '';
+    if (el.fieldWhy) el.fieldWhy.value = '';
     renderCoverTypes();
     showNoteStep();
     el.noteCover.innerHTML = '';
@@ -1628,18 +1586,13 @@
         height: item.height,
         coverType: type.id,
         headline: el.fieldHeadline ? (el.fieldHeadline.value || '').trim() : '',
-        whyClick: (el.fieldWhy.value || '').trim(),
-        extra: el.fieldExtra ? (el.fieldExtra.value || '').trim() : '',
+        whyClick: el.fieldWhy ? (el.fieldWhy.value || '').trim() : '',
         tags: [],
         category: type.name,
         liked: false,
         createdAt: Date.now()
       };
-      // 自建类型不写 a/b 字段；默认五类照常写入各自的两个字段
-      if (!type.custom) {
-        record[type.a.key] = el.fieldA ? (el.fieldA.value || '').trim() : '';
-        record[type.b.key] = el.fieldB ? (el.fieldB.value || '').trim() : '';
-      }
+      // 旧库若已有 a/b/extra 字段保留不删；新保存只写 headline + whyClick
       try {
         var db = await openDb();
         await idbPut(db, record);
@@ -2213,17 +2166,11 @@
 
   function sheetSnapshot(item) {
     var type = getCoverType(item && item.coverType);
-    var snap = {
+    return {
       coverType: type ? type.id : '',
       headline: String((item && item.headline) || ''),
-      whyClick: String((item && item.whyClick) || ''),
-      extra: legacyExtra(item)
+      whyClick: String((item && item.whyClick) || '')
     };
-    if (type && !type.custom) {
-      snap[type.a.key] = String(item[type.a.key] || '');
-      snap[type.b.key] = String(item[type.b.key] || '');
-    }
-    return snap;
   }
 
   function sheetNorm(value) {
@@ -2333,10 +2280,8 @@
     });
   }
 
-  /** Detail sheet mirrors the note page: 封面主文案 → 为什么想点 →
-   *  the record's own type's two fields → 补充想法. Legacy records
-   *  without a coverType only show the common fields (their old
-   *  feeling/structure/learnable text lives in extra). */
+  /** Detail sheet mirrors the note page: only 封面主文案 + 为什么想点.
+   *  Legacy a/b/extra stay in IndexedDB untouched; not shown for edit. */
   function fillSheetFields(item) {
     if (!el.sheetFields || !item || !state.sheetDraft) return;
     el.sheetFields.innerHTML = '';
@@ -2344,11 +2289,6 @@
     if (type) sheetAddType(el.sheetFields, type.name);
     sheetAddEditor(el.sheetFields, '封面主文案', 'headline');
     sheetAddEditor(el.sheetFields, '为什么想点', 'whyClick');
-    if (type && !type.custom) {
-      sheetAddEditor(el.sheetFields, type.a.label, type.a.key);
-      sheetAddEditor(el.sheetFields, type.b.label, type.b.key);
-    }
-    sheetAddEditor(el.sheetFields, '补充想法', 'extra');
     sheetAddField(el.sheetFields, '保存', formatSavedAt(item.createdAt));
     syncSheetSaveBtn();
   }
@@ -3270,30 +3210,21 @@
       lines: ['裸辞3个月', '我后悔了吗'],
       type: 'result',
       headline: '裸辞3个月，我后悔了吗',
-      why: '数字太夸张了、感觉在说我',
-      a: '0粉→10万粉，用了90天',
-      b: '后台数据截图',
-      extra: '高饱和渐变 + 大字标题'
+      why: '数字太夸张了、感觉在说我'
     },
     {
       stops: [['0', '#c2f7d9'], ['0.45', '#8fe3b0'], ['1', '#3f8ef7']],
       lines: ['成年人的崩溃', '是静音的'],
       type: 'emotion',
       headline: '成年人的崩溃，是静音的',
-      why: '第一句就破防了',
-      a: '破防——深夜加班回家的地铁上',
-      b: '第一人称独白 + 深夜氛围',
-      extra: '低饱和冷色 + 大留白'
+      why: '第一句就破防了'
     },
     {
       stops: [['0', '#f7f3c2'], ['0.45', '#f7c94b'], ['1', '#f78c5a']],
       lines: ['以为多喝水养胃', '其实喝太多伤肾'],
       type: 'contrast',
       headline: '以为多喝水养胃，其实伤肾',
-      why: '反常识，想点进去看依据',
-      a: '以为多喝水养胃 / 其实喝太多伤肾',
-      b: '三甲医院医生亲述',
-      extra: '高对比撞色 + 划线纠错排版'
+      why: '反常识，想点进去看依据'
     }
   ];
 
@@ -3319,9 +3250,6 @@
     chooseCoverType(theme.type);
     if (el.fieldHeadline) el.fieldHeadline.value = theme.headline;
     if (el.fieldWhy) el.fieldWhy.value = theme.why;
-    if (el.fieldA) el.fieldA.value = theme.a;
-    if (el.fieldB) el.fieldB.value = theme.b;
-    if (el.fieldExtra) el.fieldExtra.value = theme.extra;
   }
 
   function prepareDemo() {
@@ -3403,11 +3331,6 @@
     el.noteForm = $('note-form');
     el.fieldHeadline = $('field-headline');
     el.fieldWhy = $('field-why');
-    el.fieldA = $('field-a');
-    el.fieldB = $('field-b');
-    el.fieldALabel = $('field-a-label');
-    el.fieldBLabel = $('field-b-label');
-    el.fieldExtra = $('field-extra');
     el.noteProgress = $('note-progress');
     el.noteCoverWrap = $('note-cover-wrap');
     el.ppCreases = $('pp-creases');
