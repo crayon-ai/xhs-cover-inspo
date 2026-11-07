@@ -27,6 +27,10 @@
   var PROJ_STEP = 3;      // px stride when sampling projections
   var WHITE_BRIGHT = 245; // pixel brightness >= this counts as "white"
   var GAP_ROW = 0.02;     // row counts as near-empty below this non-white ratio
+  // Note: near-empty gaps come in two flavours — page gutters render at
+  // ~250 brightness (gray), while whitespace INSIDE a cover (collage
+  // seams, white-background text covers) is pure white (>=253). Only the
+  // first kind should split covers; see findCoverBlocksInColumn.
 
   var state = {
     view: 'import',
@@ -663,7 +667,78 @@
     return runs;
   }
 
-  function findCoverBlocksInColumn(data, imgW, imgH, x0, x1) {
+  // True when a near-empty gap is a pure-white interior seam (merge the
+  // blocks it separates) rather than containing gray page-gutter rows
+  // (real card boundary). Per-row test: white padding around a card
+  // boundary must not dilute a gutter row (~250 across ~97% of the column)
+  // into passing; light JPEG halos around dark cover edges stay well under.
+  function gapIsWhiteSeam(data, imgW, gy0, gy1, x0, x1) {
+    var found = false;
+    for (var y = gy0; y <= gy1; y += PROJ_STEP) {
+      found = true;
+      if (gutterFracInXRange(data, imgW, y, x0, x1) > 0.6) return false;
+    }
+    return found;
+  }
+
+  // Build density blocks over [x0, x1] and merge neighbours separated by
+  // pure-white interior seams. mergeFromY: gaps starting above it are never
+  // merged (sticky top bar / chrome region where a partial cover may sit
+  // right below the bar — merging there glues unrelated strips together).
+  // Merges that would exceed maxMergedH are refused, so a cover never grows
+  // into the title/author rows of the next card. Each block records its
+  // tallest raw piece: a block made only of short text rows is a caption
+  // strip, not a cover (callers filter it out).
+  function blocksWithWhiteMerge(data, imgW, imgH, dens, x0, x1, mergeFromY, yBase, maxMergedH) {
+    var colW = x1 - x0 + 1;
+    var gapRows = Math.max(4, Math.round(imgH * 0.002));
+    var raw = [];
+    var y = 0;
+    while (y < dens.length) {
+      if (dens[y] > GAP_ROW) {
+        var s = y;
+        var e = y;
+        var run = 0;
+        while (y < dens.length) {
+          if (dens[y] <= GAP_ROW) {
+            run++;
+            if (run >= gapRows) break;
+          } else {
+            run = 0;
+            e = y;
+          }
+          y++;
+        }
+        raw.push({ y0: yBase + s, y1: yBase + e });
+      } else {
+        y++;
+      }
+    }
+    if (maxMergedH == null) {
+      maxMergedH = Math.round(colW * 1.35);
+    }
+    var maxSeam = Math.round(colW * 0.25);
+    var blocks = [];
+    for (var b = 0; b < raw.length; b++) {
+      var blk = raw[b];
+      var prev = blocks.length ? blocks[blocks.length - 1] : null;
+      if (prev) {
+        var gy0 = prev.y1 + 1;
+        var gy1 = blk.y0 - 1;
+        if (gy0 >= mergeFromY && gy1 - gy0 + 1 <= maxSeam &&
+            blk.y1 - prev.y0 + 1 <= maxMergedH &&
+            gapIsWhiteSeam(data, imgW, gy0, gy1, x0, x1)) {
+          prev.y1 = blk.y1;
+          prev.pieces.push(blk.y1 - blk.y0 + 1);
+          continue;
+        }
+      }
+      blocks.push({ y0: blk.y0, y1: blk.y1, pieces: [blk.y1 - blk.y0 + 1] });
+    }
+    return blocks;
+  }
+
+  function findCoverBlocksInColumn(data, imgW, imgH, x0, x1, mergeFromY) {
     var colW = x1 - x0 + 1;
     var dens = [];
     for (var y = 0; y < imgH; y++) {
@@ -676,31 +751,12 @@
       }
       dens.push(cnt / total);
     }
-    var gapRows = Math.max(4, Math.round(imgH * 0.002));
-    var blocks = [];
-    y = 0;
-    while (y < imgH) {
-      if (dens[y] > GAP_ROW) {
-        var s = y;
-        var e = y;
-        var run = 0;
-        while (y < imgH) {
-          if (dens[y] <= GAP_ROW) {
-            run++;
-            if (run >= gapRows) break;
-          } else {
-            run = 0;
-            e = y;
-          }
-          y++;
-        }
-        blocks.push({ y0: s, y1: e });
-      } else {
-        y++;
-      }
+    if (mergeFromY == null) {
+      mergeFromY = Math.max(80, Math.round(imgH * 0.11));
     }
+    var blocks = blocksWithWhiteMerge(data, imgW, imgH, dens, x0, x1, mergeFromY, 0);
     var covers = [];
-    var minCoverH = Math.round(colW * 0.3);
+    var minCoverH = Math.round(colW * 0.35);
     for (var b = 0; b < blocks.length; b++) {
       var blk = blocks[b];
       // Blocks touching the very top are the fixed chrome (status bar, nav,
@@ -710,6 +766,13 @@
       // White-background covers still segment correctly because the gaps
       // around them are pure white while their interior is not.
       if (blk.y1 - blk.y0 + 1 < minCoverH) continue;
+      // A merged block whose every raw piece is short is a caption strip
+      // (title + author rows fused across white gaps), not a cover.
+      var maxPiece = 0;
+      for (var p = 0; p < blk.pieces.length; p++) {
+        if (blk.pieces[p] > maxPiece) maxPiece = blk.pieces[p];
+      }
+      if (maxPiece < Math.round(colW * 0.25)) continue;
       covers.push({ y0: blk.y0, y1: blk.y1 });
     }
     return covers;
@@ -927,6 +990,109 @@
     return tiles;
   }
 
+  // Open-band cover (leading / trailing fallback): when no ~250 gutter
+  // bounds a card above (or cardTilesInBand fails on a white/text cover),
+  // build density blocks and merge across pure-white interior seams. Collage
+  // / text covers often have white gaps >> title-line pad, so a pad-limited
+  // grow from the tallest run stops at the first panel — white-seam merge
+  // with a cover-height cap is the generic fix. Reject blocks glued to the
+  // band top (chrome) and blocks that leave no title/author room at the
+  // band bottom (chrome-cut partials).
+  function coverTileInOpenBand(data, imgW, imgH, band, bx0, bx1) {
+    var colW = bx1 - bx0 + 1;
+    var dens = [];
+    for (var y = band.y0; y <= band.y1; y++) {
+      var cnt = 0;
+      var total = 0;
+      for (var x = bx0; x <= bx1; x += PROJ_STEP) {
+        total++;
+        var i = (y * imgW + x) * 4;
+        if ((data[i] + data[i + 1] + data[i + 2]) / 3 < WHITE_BRIGHT) cnt++;
+      }
+      dens.push(cnt / total);
+    }
+    var chromeTop = Math.max(80, Math.round(imgH * 0.11));
+    var mergeFromY = Math.max(band.y0, chromeTop);
+    // Allow taller merge then trim title/author; collage covers need room
+    // for white interior seams without prematurely hitting maxMergedH.
+    var maxMergedH = Math.round(colW * 1.6);
+    var blocks = blocksWithWhiteMerge(
+      data, imgW, imgH, dens, bx0, bx1, mergeFromY, band.y0, maxMergedH
+    );
+    var pad = Math.round(colW * 0.055);
+    var minCoverH = Math.round(colW * 0.35);
+    var minPiece = Math.round(colW * 0.25);
+    var best = null;
+    for (var b = 0; b < blocks.length; b++) {
+      var blk = blocks[b];
+      if (blk.y0 <= band.y0 + 1) continue;
+      var h = blk.y1 - blk.y0 + 1;
+      if (h < minCoverH) continue;
+      var maxPiece = 0;
+      for (var p = 0; p < blk.pieces.length; p++) {
+        if (blk.pieces[p] > maxPiece) maxPiece = blk.pieces[p];
+      }
+      if (maxPiece < minPiece) continue;
+      if (!best || h > best.h) best = { y0: blk.y0, y1: blk.y1, h: h };
+    }
+    if (!best) return [];
+    // Snap top to the first substantial content piece so chrome/label
+    // crumbs above a short complete cover are not kept.
+    var coverTop = best.y0;
+    var acc = best.y0;
+    // Re-scan pieces via text runs overlapping the block: first run taller
+    // than minPiece becomes the cover top.
+    var allRuns = textRunsInBand(data, imgW, imgH, band, bx0, bx1);
+    for (var ri = 0; ri < allRuns.length; ri++) {
+      if (allRuns[ri].y1 < best.y0 || allRuns[ri].y0 > best.y1) continue;
+      if (allRuns[ri].y1 - allRuns[ri].y0 + 1 >= minPiece) {
+        coverTop = allRuns[ri].y0;
+        break;
+      }
+    }
+    // Trim external title/author/like: only walk short runs in the bottom
+    // caption zone near the gutter. Cover-internal text lines further up
+    // must not be mistaken for the note title (white text covers).
+    var coverBottom = best.y1;
+    var captionZone = band.y1 - Math.round(colW * 0.4);
+    var cap = [];
+    for (ri = 0; ri < allRuns.length; ri++) {
+      if (allRuns[ri].y0 >= captionZone) cap.push(allRuns[ri]);
+    }
+    if (cap.length >= 2) {
+      var idx = cap.length - 1;
+      var titleTop = -1;
+      var lines = 0;
+      while (lines < 2 && idx - 1 >= 0) {
+        var cand = cap[idx - 1];
+        if (cap[idx].y0 - cand.y1 > pad * 1.5) break;
+        if (cand.y1 - cand.y0 + 1 > pad * 1.6) break;
+        titleTop = cand.y0;
+        idx--;
+        lines++;
+      }
+      if (titleTop >= coverTop && titleTop <= best.y1 + pad) {
+        // Cover ends at the last content run above the title cluster.
+        var above = -1;
+        for (ri = 0; ri < allRuns.length; ri++) {
+          if (allRuns[ri].y1 < titleTop && allRuns[ri].y1 > above) {
+            above = allRuns[ri].y1;
+          }
+        }
+        if (above >= coverTop) coverBottom = above;
+        else coverBottom = titleTop - pad;
+      }
+    }
+    if (coverBottom <= coverTop) return [];
+    if (band.y1 - coverBottom < pad * 1.5) return [];
+    if (coverBottom - coverTop + 1 < minCoverH) return [];
+    return [{ x: bx0, w: colW, y0: coverTop, y1: coverBottom, band: band }];
+  }
+
+  function leadingTileInBand(data, imgW, imgH, band, bx0, bx1) {
+    return coverTileInOpenBand(data, imgW, imgH, band, bx0, bx1);
+  }
+
   function detectCardTiles(data, imgW, imgH) {
     var tiles = [];
     var gut = findGutterRuns(data, imgW, imgH);
@@ -955,20 +1121,34 @@
       if (cx1 - cx0 + 1 < minColW) continue;
       var cg = findGutterRunsInCol(data, imgW, imgH, cx0, cx1);
       if (cg.length < 1) continue;
+      // Leading card above the first per-column gutter (mirrors the
+      // trailing case below).
+      var chromeH = Math.max(80, Math.round(imgH * 0.08));
+      if (cg[0].y0 - 1 - chromeH > Math.round(imgW * 0.12)) {
+        var bandL = { y0: chromeH, y1: cg[0].y0 - 1 };
+        tiles = tiles.concat(leadingTileInBand(data, imgW, imgH, bandL, cx0, cx1));
+      }
       for (var g2 = 0; g2 + 1 < cg.length; g2++) {
         var band2 = { y0: cg[g2].y1 + 1, y1: cg[g2 + 1].y0 - 1 };
-        tiles = tiles.concat(cardTilesInBand(data, imgW, imgH, band2, cx0, cx1));
+        var midTiles = cardTilesInBand(data, imgW, imgH, band2, cx0, cx1);
+        if (!midTiles.length) {
+          midTiles = coverTileInOpenBand(data, imgW, imgH, band2, cx0, cx1);
+        }
+        tiles = tiles.concat(midTiles);
       }
       // Trailing card below the last per-column gutter. Bottom cards often
       // have no following ~250 gutter (only title/author white, then the
       // tab-bar chrome), so the between-gutter loop never sees them and the
       // light-cover projection fallback crops an embedded dark island.
-      var chromeH = Math.max(80, Math.round(imgH * 0.08));
       var trailY1 = imgH - 1 - chromeH;
       var lastG = cg[cg.length - 1];
       if (trailY1 - lastG.y1 > Math.round(imgW * 0.12)) {
         var bandT = { y0: lastG.y1 + 1, y1: trailY1 };
-        tiles = tiles.concat(cardTilesInBand(data, imgW, imgH, bandT, cx0, cx1));
+        var trailTiles = cardTilesInBand(data, imgW, imgH, bandT, cx0, cx1);
+        if (!trailTiles.length) {
+          trailTiles = coverTileInOpenBand(data, imgW, imgH, bandT, cx0, cx1);
+        }
+        tiles = tiles.concat(trailTiles);
       }
     }
     return tiles;
@@ -995,7 +1175,11 @@
     }
     for (var c = 0; c < cols.length; c++) {
       var col = cols[c];
-      var blocks = findCoverBlocksInColumn(data, imgW, imgH, col.x0, col.x1);
+      // Merge white seams anywhere below the sticky chrome. Gray page
+      // gutters still refuse merge via gapIsWhiteSeam; do not gate at the
+      // first column gutter or leading collages above it stay oversplit.
+      var mergeFromY = Math.max(80, Math.round(imgH * 0.11));
+      var blocks = findCoverBlocksInColumn(data, imgW, imgH, col.x0, col.x1, mergeFromY);
       for (var b = 0; b < blocks.length; b++) {
         var blk = blocks[b];
         // Blocks already covered by a card tile (its cover spans the whole
@@ -1006,7 +1190,11 @@
           var t2 = cardTiles[k2];
           var ovY = Math.min(blk.y1, t2.y1) - Math.max(blk.y0, t2.y0) + 1;
           var ovX = Math.min(col.x1 + 1, t2.x + t2.w) - Math.max(col.x0, t2.x);
-          if (ovX > 0 && ovY > (blk.y1 - blk.y0 + 1) * 0.5) {
+          var blkH = blk.y1 - blk.y0 + 1;
+          var cardH = t2.y1 - t2.y0 + 1;
+          // Half of either side: a projection tail that only partly overlaps
+          // a card (cover fragment + glued title) must still be dropped.
+          if (ovX > 0 && ovY > 0 && (ovY > blkH * 0.3 || ovY > cardH * 0.5)) {
             dup = true;
             break;
           }
