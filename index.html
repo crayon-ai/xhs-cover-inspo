@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>封面灵感收集</title>
-  <link rel="stylesheet" href="./styles.css?v=20261107g" />
+  <link rel="stylesheet" href="./styles.css?v=20261110a" />
+  <link rel="stylesheet" href="./follow/follow.css?v=20261110a" />
 </head>
 <body>
   <nav class="tabs" id="tabs" aria-label="主导航" hidden>
@@ -127,6 +128,10 @@
         <svg viewBox="0 0 20 20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12.5 4 6.5 10l6 6"/></svg>
       </button>
       <span class="viewer-topbar__title">封面预览</span>
+      <button type="button" id="viewer-follow" class="viewer-follow" data-testid="fm-entry-viewer" aria-label="照着做">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M20 2v4M22 4h-4"/><circle cx="4" cy="20" r="2" fill="currentColor"/></svg>
+        <span>照着做</span>
+      </button>
     </header>
     <canvas id="viewer-canvas" aria-label="封面预览"></canvas>
     <nav id="viewer-bar" class="viewer-bar" aria-label="封面操作">
@@ -158,6 +163,10 @@
       <div class="lib-sheet__cover" id="lib-sheet-cover"></div>
       <div class="lib-sheet__fields" id="lib-sheet-fields"></div>
       <button type="button" id="sheet-save" class="sheet-save" hidden>确认修改</button>
+      <button type="button" id="sheet-follow" class="sheet-follow" data-testid="fm-entry-sheet">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M20 2v4M22 4h-4"/><circle cx="4" cy="20" r="2" fill="currentColor"/></svg>
+        照着做
+      </button>
       <button type="button" id="lib-sheet-delete" class="lib-sheet__delete">删除</button>
     </div>
     <div id="sheet-confirm" class="sheet-confirm" hidden>
@@ -217,6 +226,9 @@
     </svg>
     已收入灵感库
   </div>
-  <script src="./app.js?v=20261107g"></script>
+  <script src="./follow/components.js?v=20261110a"></script>
+  <script src="./follow/presets.js?v=20261110a"></script>
+  <script src="./follow/follow.js?v=20261110a"></script>
+  <script src="./app.js?v=20261110a"></script>
 </body>
 </html>

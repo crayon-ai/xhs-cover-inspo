@@ -1,0 +1,312 @@
+/* 照着做 — 编辑器样式（移植自 follow-make-demo v3.1 demo.css）
+ * 所有规则限定在 #fm-root / .fm- 前缀下，不影响现有页面。
+ *
+ * 字体（@font-face 由 follow.js 首次打开时动态插入，页面初始不加载）：
+ *   SourceHanSansCN-Heavy.woff2  — 思源黑体 Heavy   — SIL OFL 1.1 — assets/follow/licenses/SourceHanSans-OFL.txt
+ *   SourceHanSerifCN-Heavy.woff2 — 思源宋体 Heavy   — SIL OFL 1.1 — assets/follow/licenses/SourceHanSerif-OFL.txt
+ *   SmileySans-Oblique.woff2     — 得意黑           — SIL OFL 1.1 — assets/follow/licenses/SmileySans-OFL.txt
+ *   ZCOOLKuaiLe-Regular.woff2    — 站酷快乐体       — SIL OFL 1.1 — assets/follow/licenses/ZCOOLKuaiLe-OFL.txt
+ * 图标：Lucide（内联 SVG path，ISC）— assets/follow/licenses/Lucide-ISC.txt
+ */
+
+#fm-root *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+#fm-root{
+  position:fixed;inset:0;z-index:150; /* 高于 img-viewer(30) / lib-sheet(40) / 面板 95 */
+  background:#FFFFFF;
+  display:flex;flex-direction:column;
+  font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;
+  color:#1A1A1A;
+  overflow:hidden;
+}
+#fm-root button{border:0;background:none;font-family:inherit;color:inherit;cursor:pointer;}
+
+/* ---------- 顶栏 ---------- */
+#fm-root .fm-topbar{
+  height:52px;flex:none;display:flex;align-items:center;
+  padding:0 10px;border-bottom:1px solid #F0EEE8;background:#fff;position:relative;z-index:29;
+}
+#fm-root .fm-side{width:132px;display:flex;align-items:center;gap:2px;}
+#fm-root .fm-side-r{justify-content:flex-end;}
+#fm-root .fm-tb-title{flex:1;text-align:center;font-size:17px;font-weight:650;letter-spacing:.04em;}
+#fm-root .fm-iconbtn{
+  width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  color:#1A1A1A;
+}
+#fm-root .fm-iconbtn svg{width:20px;height:20px;}
+#fm-root .fm-iconbtn:disabled{color:#C8C6BF;}
+#fm-root .fm-iconbtn:not(:disabled):active{background:#F4F2EC;}
+#fm-root .fm-export-btn{
+  height:32px;padding:0 16px;border-radius:999px;background:#1E1E1E;color:#fff;
+  font-size:13px;font-weight:600;margin-left:6px;flex:none;white-space:nowrap;
+}
+#fm-root .fm-export-btn:active{transform:scale(.96);}
+
+/* ---------- 画布区 ---------- */
+#fm-root .fm-stage{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  padding:8px 0 10px;min-height:0;position:relative;
+}
+#fm-root .fm-chips-row{
+  flex:none;display:flex;gap:8px;align-items:center;height:30px;margin-bottom:6px;
+}
+#fm-root .fm-chip{
+  height:28px;padding:0 12px;border-radius:999px;background:#F4F2EC;
+  display:flex;align-items:center;gap:6px;font-size:12px;font-weight:550;color:#55534D;
+}
+#fm-root .fm-chip .fm-eye{width:14px;height:14px;display:inline-block;}
+#fm-root .fm-chip .fm-eye svg{width:14px;height:14px;display:block;}
+#fm-root .fm-chip.on{background:#1E1E1E;color:#fff;}
+#fm-root .fm-chip.fm-ghost{background:#fff;border:1px solid #E4E2DB;}
+#fm-root .fm-chip:active{transform:scale(.96);}
+#fm-root .fm-canvas-area{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative;width:100%;}
+#fm-root .fm-canvas-area.exporting{flex-direction:column;gap:14px;}
+#fm-root .fm-canvas-wrap{position:relative;flex:none;}
+#fm-root .fm-canvas{
+  width:300px;height:400px;position:relative;
+  background:#FCF8ED;overflow:hidden;
+  border-radius:2px;
+  box-shadow:0 8px 28px rgba(0,0,0,.12);
+  touch-action:none;
+}
+#fm-root .fm-paper-tex{
+  position:absolute;inset:0;pointer-events:none;
+  mix-blend-mode:multiply;opacity:.07;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+#fm-root .fm-layer,#fm-root .layer{position:absolute;transform-origin:center;user-select:none;-webkit-user-select:none;touch-action:none;}
+#fm-root .fm-layer svg{overflow:visible;}
+
+/* 参考层 */
+#fm-root .fm-ref-layer{
+  position:absolute;inset:0;pointer-events:none;z-index:60;display:none;
+  border-radius:2px;overflow:hidden;
+}
+#fm-root .fm-ref-layer img{width:100%;height:100%;object-fit:cover;display:block;}
+#fm-root .fm-ref-layer.on{display:block;}
+
+/* 辅助线 */
+#fm-root .fm-guides{position:absolute;inset:0;pointer-events:none;z-index:70;}
+#fm-root .fm-guide{position:absolute;background:#E8743B;}
+#fm-root .fm-guide.v{width:1px;top:0;bottom:0;}
+#fm-root .fm-guide.h{height:1px;left:0;right:0;}
+
+/* 选中 overlay */
+#fm-root .fm-overlay{position:absolute;inset:0;pointer-events:none;z-index:65;}
+#fm-root .fm-sel-box{
+  position:absolute;border:1.2px solid #27362F;pointer-events:none;
+}
+#fm-root .fm-handle{
+  position:absolute;width:16px;height:16px;border-radius:50%;
+  background:#fff;border:1.2px solid rgba(39,54,47,.45);
+  box-shadow:0 1px 3px rgba(0,0,0,.18);
+  pointer-events:auto;transform:translate(-50%,-50%);
+}
+#fm-root .fm-handle.fm-rot{width:24px;height:24px;background:#fff;display:flex;align-items:center;justify-content:center;}
+#fm-root .fm-handle.fm-rot svg{width:14px;height:14px;display:block;}
+#fm-root .fm-rot-stem{position:absolute;width:1px;background:#27362F;pointer-events:none;opacity:.7;}
+
+/* ---------- 底部工具栏 ---------- */
+#fm-root .fm-toolbar{
+  height:66px;flex:none;display:flex;align-items:stretch;background:#fff;
+  border-top:1px solid #F0EEE8;padding:0 6px;z-index:20;
+}
+#fm-root .fm-tool{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  color:#1A1A1A;
+}
+#fm-root .fm-tool:active{opacity:.6;}
+#fm-root .fm-tool .fm-ti{width:22px;height:22px;}
+#fm-root .fm-tool .fm-ti svg{width:22px;height:22px;display:block;}
+#fm-root .fm-tool .fm-tl{font-size:11px;font-weight:500;}
+
+/* ---------- 底部弹层 ---------- */
+/* mask 只做视觉层：不拦截事件——面板开着时画布图层仍可直接按住拖动/选中；
+   「点画布空白收起面板」由画布与 stage 的空白 pointerdown 处理 */
+#fm-root .fm-sheet-mask{
+  position:absolute;inset:0;background:transparent;z-index:28;
+  opacity:0;pointer-events:none;transition:opacity .22s;
+}
+#fm-root .fm-sheet{
+  position:absolute;left:0;right:0;bottom:0;z-index:30;
+  background:#fff;border-radius:20px 20px 0 0;
+  max-height:56%;
+  display:flex;flex-direction:column;
+  transform:translateY(105%);transition:transform .26s cubic-bezier(.32,.72,.24,1),visibility 0s linear .26s;
+  visibility:hidden;
+  box-shadow:0 -8px 32px rgba(0,0,0,.10);
+}
+#fm-root .fm-sheet.on{transform:translateY(0);visibility:visible;transition:transform .26s cubic-bezier(.32,.72,.24,1);}
+#fm-root .fm-sheet-grab{
+  width:36px;height:4px;border-radius:2px;background:#DDDAD2;margin:8px auto 2px;flex:none;
+}
+#fm-root .fm-sheet-titlebar{flex:none;display:flex;align-items:center;position:relative;padding:2px 0 6px;}
+#fm-root .fm-sheet-title{flex:1;text-align:center;font-size:15px;font-weight:600;}
+#fm-root .fm-sheet-close{
+  position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;color:#8A8A8A;
+}
+#fm-root .fm-sheet-close:active{background:#F4F2EC;}
+#fm-root .fm-sheet-close svg{width:16px;height:16px;display:block;}
+#fm-root .fm-sheet-body{flex:1;overflow-y:auto;padding:0 16px 22px;min-height:0;}
+#fm-root .fm-sheet-body::-webkit-scrollbar{width:0;}
+
+/* 面板内控件 */
+#fm-root .fm-sec{margin-top:10px;}
+#fm-root .fm-sec-label{font-size:12px;font-weight:600;color:#8A8A8A;margin-bottom:5px;}
+#fm-root .fm-hint{color:#999;font-size:13px;padding:20px 0;}
+#fm-root .fm-run-chips{display:flex;gap:6px;flex-wrap:wrap;}
+#fm-root .fm-run-chip{
+  height:28px;padding:0 10px;border-radius:999px;border:1px solid #E4E2DB;background:#fff;
+  font-size:12px;display:flex;align-items:center;gap:5px;
+}
+#fm-root .fm-run-chip.sel{border-color:#1E1E1E;background:#1E1E1E;color:#fff;}
+#fm-root .fm-run-chip .fm-cd{width:10px;height:10px;border-radius:50%;border:1px solid rgba(0,0,0,.15);}
+#fm-root .fm-input{
+  width:100%;border:1px solid #E4E2DB;border-radius:10px;padding:8px 10px;
+  font-size:14px;font-family:inherit;background:#FAFAF7;
+}
+#fm-root .fm-input:focus{outline:none;border-color:#1E1E1E;}
+#fm-root .fm-ta-input{height:44px;}
+
+/* 字效预设卡横滑 */
+#fm-root .fm-ts-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;}
+#fm-root .fm-ts-row::-webkit-scrollbar{display:none;}
+#fm-root .fm-ts-card{
+  flex:none;width:84px;height:70px;border-radius:12px;border:1px solid #E4E2DB;background:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+}
+#fm-root .fm-ts-card.sel{border-color:#1E1E1E;border-width:1.6px;background:#FAFAF7;}
+#fm-root .fm-ts-card .fm-ts-sample{display:flex;align-items:center;justify-content:center;overflow:visible;}
+#fm-root .fm-ts-card .fm-ts-name{font-size:10px;color:#8A887F;}
+
+/* 高亮色点 */
+#fm-root .fm-hl-dot{width:26px;height:26px;}
+
+/* 取色 */
+#fm-root .fm-pal{display:flex;gap:8px;flex-wrap:wrap;}
+#fm-root .fm-swatch{
+  width:28px;height:28px;border-radius:50%;border:1px solid rgba(0,0,0,.12);position:relative;
+}
+#fm-root .fm-swatch.sel::after{
+  content:'';position:absolute;inset:-4px;border:1.6px solid #1E1E1E;border-radius:50%;
+}
+
+/* 图标网格 */
+#fm-root .fm-icon-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;}
+#fm-root .fm-icon-cell{
+  height:36px;border-radius:9px;border:1px solid #E4E2DB;background:#fff;
+  display:flex;align-items:center;justify-content:center;color:#3A3A36;
+}
+#fm-root .fm-icon-cell svg{width:19px;height:19px;}
+#fm-root .fm-solid-cap{width:20px;height:20px;display:block;}
+#fm-root .fm-solid-cap svg{width:20px;height:20px;display:block;}
+#fm-root .fm-icon-cell.sel{border:2px solid #27362F;background:#F1EFE9;color:#3A3A36;}
+
+/* 组件卡 */
+#fm-root .fm-add-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:10px;}
+#fm-root .fm-add-card{
+  border-radius:14px;border:1px solid #E4E2DB;background:#fff;padding:12px 4px 9px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+}
+#fm-root .fm-add-card:active{background:#FAFAF7;}
+#fm-root .fm-add-card .fm-pc-thumb{display:flex;align-items:center;justify-content:center;position:relative;overflow:visible;height:52px;}
+#fm-root .fm-add-thumb{position:relative;}
+#fm-root .fm-add-card .fm-pc-n{font-size:11.5px;font-weight:600;}
+
+/* 卡片样式 / 层级 / 换图 */
+#fm-root .fm-card-row{display:flex;gap:8px;}
+#fm-root .fm-card-style{
+  flex:1;height:36px;border-radius:10px;border:1px solid #E4E2DB;background:#fff;
+  font-size:12.5px;font-weight:550;color:#6B6960;
+}
+#fm-root .fm-card-style.sel{border-color:#1E1E1E;border-width:1.6px;background:#FAFAF7;color:#1A1A1A;font-weight:650;}
+#fm-root .fm-zrow{display:flex;gap:8px;}
+#fm-root .fm-zbtn{
+  flex:1;height:32px;border-radius:9px;background:#F4F2EC;font-size:12px;font-weight:600;
+}
+#fm-root .fm-zbtn:active{background:#E9E6DE;}
+#fm-root .fm-btn-dark{
+  height:38px;padding:0 22px;border-radius:999px;background:#1E1E1E;color:#fff;font-size:13.5px;font-weight:600;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+}
+#fm-root .fm-btn-dark:active{transform:scale(.97);}
+#fm-root .fm-btn-ghost{
+  height:38px;padding:0 20px;border-radius:999px;background:#fff;border:1px solid #E4E2DB;color:#1A1A1A;
+  font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;
+}
+
+/* 模板切换 */
+#fm-root .fm-tpl-row{display:flex;gap:8px;}
+#fm-root .fm-tpl-btn{
+  flex:1;height:52px;border-radius:12px;border:1px solid #E4E2DB;background:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  font-size:12.5px;font-weight:600;color:#1A1A1A;
+}
+#fm-root .fm-tpl-btn .fm-tpl-src{font-size:10px;font-weight:500;color:#9A988F;}
+#fm-root .fm-tpl-btn.sel{border-color:#1E1E1E;border-width:1.6px;background:#FAFAF7;}
+
+/* 图层面板 */
+#fm-root .fm-layer-list{display:flex;flex-direction:column;}
+#fm-root .fm-lrow{
+  display:flex;align-items:center;gap:10px;height:40px;padding:0 4px;border-radius:10px;
+}
+#fm-root .fm-lrow.sel{background:#F4F2EC;}
+#fm-root .fm-lrow:active{opacity:.85;}
+#fm-root .fm-lrow .fm-lthumb{
+  width:28px;height:28px;border-radius:7px;background:#F4F2EC;flex:none;
+  display:flex;align-items:center;justify-content:center;color:#55534D;overflow:hidden;
+}
+#fm-root .fm-lrow .fm-lthumb img{width:100%;height:100%;object-fit:cover;}
+#fm-root .fm-lrow .fm-lthumb svg{width:16px;height:16px;}
+#fm-root .fm-ln{flex:1;font-size:13.5px;font-weight:520;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#fm-root .fm-leye{width:30px;height:30px;display:flex;align-items:center;justify-content:center;color:#9A988F;}
+#fm-root .fm-leye.off{color:#D5D2C9;}
+#fm-root .fm-leye svg{width:16px;height:16px;}
+#fm-root .fm-layer-actions{
+  flex:none;display:flex;gap:8px;padding:10px 16px 18px;border-top:1px solid #F4F2EC;background:#fff;
+}
+#fm-root .fm-lact{
+  flex:1;height:36px;border-radius:10px;background:#F4F2EC;font-size:12.5px;font-weight:600;
+  display:flex;align-items:center;justify-content:center;gap:4px;
+}
+#fm-root .fm-lact:active{background:#E9E6DE;}
+#fm-root .fm-lact.danger{color:#C43C2C;}
+
+/* ---------- 导出视图 ---------- */
+#fm-root .fm-export-ui{display:none;flex-direction:column;align-items:center;gap:12px;width:100%;}
+#fm-root .fm-export-ui.on{display:flex;}
+#fm-root .fm-ex-meta{font-size:12px;color:#9A988F;margin-top:10px;}
+#fm-root .fm-ex-btns{display:flex;gap:10px;}
+
+/* ---------- toast ---------- */
+#fm-root .fm-toast{
+  position:absolute;left:50%;bottom:96px;transform:translateX(-50%) translateY(8px);
+  background:rgba(30,30,30,.92);color:#fff;font-size:12.5px;padding:8px 16px;border-radius:999px;
+  opacity:0;pointer-events:none;transition:all .2s;z-index:50;white-space:nowrap;
+}
+#fm-root .fm-toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* 画布内组件 */
+#fm-root .fm-img-wrap{width:100%;height:100%;}
+
+/* ---------- 入口：全屏预览顶栏「照着做」胶囊 ---------- */
+.viewer-follow{
+  position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  height:32px;padding:0 12px;border-radius:999px;
+  background:#1E1E1E;color:#fff;border:0;
+  font-size:12.5px;font-weight:600;font-family:inherit;
+  display:inline-flex;align-items:center;gap:5px;
+}
+.viewer-follow svg{width:14px;height:14px;display:block;}
+.viewer-follow:active{transform:translateY(-50%) scale(.96);}
+
+/* ---------- 入口：查详情弹层「照着做」主按钮 ---------- */
+.sheet-follow{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  width:100%;height:44px;margin:14px 0 10px;
+  border-radius:12px;background:#1E1E1E;color:#fff;border:0;
+  font-size:15px;font-weight:650;font-family:inherit;
+}
+.sheet-follow svg{width:16px;height:16px;display:block;}
+.sheet-follow:active{transform:scale(.98);}
