@@ -27,6 +27,10 @@
   var PROJ_STEP = 3;      // px stride when sampling projections
   var WHITE_BRIGHT = 245; // pixel brightness >= this counts as "white"
   var GAP_ROW = 0.02;     // row counts as near-empty below this non-white ratio
+  // Note: near-empty gaps come in two flavours — page gutters render at
+  // ~250 brightness (gray), while whitespace INSIDE a cover (collage
+  // seams, white-background text covers) is pure white (>=253). Only the
+  // first kind should split covers; see findCoverBlocksInColumn.
 
   var state = {
     view: 'import',
@@ -41,6 +45,8 @@
     coverType: '',
     extraCategories: [],
     customCategories: [],
+    deletedDefaults: [],   // 已删除默认类型 id（result/emotion/...），持久化防复活
+    deletedCustoms: [],    // 已删自建分类名（normalize 后），防扫库同名补回
     libFilter: 'all',
     sheetId: null,
     sheetBase: null,
@@ -153,8 +159,10 @@
   function persistCustomCategories() {
     try {
       localStorage.setItem(CATS_KEY, JSON.stringify({
-        version: 1,
+        version: 2,
         customs: state.customCategories || [],
+        deletedDefaults: state.deletedDefaults || [],
+        deletedCustoms: state.deletedCustoms || [],
         filter: state.libFilter || 'all'
       }));
     } catch (e) {
@@ -168,12 +176,19 @@
       var raw = localStorage.getItem(CATS_KEY);
       if (raw) {
         var data = JSON.parse(raw);
-        if (data && data.version === 1 && Array.isArray(data.customs)) {
+        // version 1 旧格式无删除记录；version 2 起带 deletedDefaults/deletedCustoms
+        if (data && (data.version === 1 || data.version === 2) && Array.isArray(data.customs)) {
           state.customCategories = data.customs.filter(function (c) {
             return c && c.name;
           }).map(function (c) {
             return { id: String(c.id || 'custom_' + uid()), name: String(c.name), createdAt: Number(c.createdAt) || 0 };
           });
+        }
+        if (data && Array.isArray(data.deletedDefaults)) {
+          state.deletedDefaults = data.deletedDefaults.map(function (id) { return String(id); });
+        }
+        if (data && Array.isArray(data.deletedCustoms)) {
+          state.deletedCustoms = data.deletedCustoms.map(function (n) { return String(n); });
         }
         state.libFilter = typeof data.filter === 'string' && data.filter ? data.filter : 'all';
       }
@@ -194,6 +209,10 @@
       if (removed) state.customCategories = kept;
     }
     syncExtraCategories();
+    // 刷新后筛选不得是被删类型名：回落到「全部」
+    if (state.libFilter && state.libFilter !== 'all' && isDeletedCategoryName(state.libFilter)) {
+      state.libFilter = 'all';
+    }
     if (removed) persistCustomCategories();
   }
 
@@ -215,6 +234,56 @@
     return null;
   }
 
+  /** 该默认类型 id 是否已被用户删除（管理类型面板里删掉的不再出现/补录） */
+  function isDeletedDefault(id) {
+    return (state.deletedDefaults || []).indexOf(String(id)) !== -1;
+  }
+
+  /** 该分类名是否是被删默认类型名或已删自建名：均不得再进入任何类型列表 */
+  function isDeletedCategoryName(name) {
+    var norm = normalizeCategoryName(name);
+    if (!norm) return false;
+    for (var i = 0; i < COVER_TYPES.length; i++) {
+      if (COVER_TYPES[i].id && isDeletedDefault(COVER_TYPES[i].id) &&
+          normalizeCategoryName(COVER_TYPES[i].name) === norm) return true;
+    }
+    return (state.deletedCustoms || []).indexOf(norm) !== -1;
+  }
+
+  /** 删除类型：默认按 id 记入 deletedDefaults；自建按 normalize 名记入 deletedCustoms。
+   *  只删类型，绝不动 IndexedDB 封面。 */
+  function deleteCoverType(id) {
+    var def = null;
+    for (var i = 0; i < COVER_TYPES.length; i++) {
+      if (COVER_TYPES[i].id === id) def = COVER_TYPES[i];
+    }
+    if (def) {
+      if ((state.deletedDefaults || []).indexOf(id) === -1) state.deletedDefaults.push(id);
+    } else {
+      var custom = null;
+      var list = state.customCategories || [];
+      for (var j = 0; j < list.length; j++) {
+        if (list[j].id === id) custom = list[j];
+      }
+      if (!custom) return;
+      var norm = normalizeCategoryName(custom.name);
+      if (norm && (state.deletedCustoms || []).indexOf(norm) === -1) state.deletedCustoms.push(norm);
+      state.customCategories = list.filter(function (c) { return c.id !== id; });
+    }
+    // 当前筛选正好是被删类型名：回落到「全部」
+    if (state.libFilter && state.libFilter !== 'all' &&
+        (def ? state.libFilter === def.name : state.libFilter === custom.name)) {
+      state.libFilter = 'all';
+    }
+    syncExtraCategories();
+    persistCustomCategories();
+    if (state.coverType === id) clearCoverType();
+    renderLibrary();
+    renderNoteCategories();
+    renderCoverTypes();
+    renderTypeSheet();
+  }
+
   /** 兼容「历史里已有但未入 customs 的分类名」：扫库补录，绝不清空 library */
   function syncCustomCategoriesFromLibrary() {
     var seen = {};
@@ -226,6 +295,7 @@
     var defaults = defaultTypeNames();
     Object.keys(seen).forEach(function (name) {
       if (defaults[normalizeCategoryName(name)]) return; // 默认类型名不补录
+      if (isDeletedCategoryName(name)) return; // 已删默认/自建：封面仍在库，但类型不复活
       rememberCategory(name);
       if (!findCustomByName(name)) {
         state.customCategories.push({ id: 'custom_' + uid(), name: name, createdAt: Date.now() });
@@ -313,64 +383,244 @@
     return /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/.test(name);
   }
 
-  async function fileToBitmap(file) {
-    // 优先 createImageBitmap；小工具 WebView 上部分相册 File 会让 CIB reject，
-    // 失败不抛出，降级到 Image(blob:)，再不行降级 FileReader → dataURL
+  // 超时包装：部分 WebView 对相册 File 解码可能挂起，超时后降级；
+  // 超时以 TimeoutError reject，晚到的原 promise 结果不再消费。
+  function withTimeout(promise, ms) {
+    var settled = false;
+    var p = Promise.resolve(promise).then(
+      function (v) { settled = true; return v; },
+      function (e) { settled = true; throw e; }
+    );
+    var to = new Promise(function (_resolve, reject) {
+      setTimeout(function () {
+        if (!settled) {
+          var err = new Error('timeout');
+          err.name = 'TimeoutError';
+          reject(err);
+        }
+      }, ms);
+    });
+    return Promise.race([p, to]);
+  }
+
+  // 导入运行状态：runId 防并发 change 互相清 state；busy 导入锁；
+  // activeBitmaps 记录本 run 持有的、需要 close() 的 ImageBitmap。
+  var IMPORT = {
+    runId: 0,
+    busy: false,
+    failShown: false,
+    activeBitmaps: [],
+    timeouts: { cib: 1200, img: 3000, reader: 5000, total: 45000 }
+  };
+
+  // ---- bitmap 登记/释放：run 边界兜底 close，slice 用完即 close ----
+  function registerBitmap(bmp) {
+    if (bmp && bmp.close && IMPORT.activeBitmaps.indexOf(bmp) < 0) IMPORT.activeBitmaps.push(bmp);
+  }
+  function releaseBitmap(bmp) {
+    var i = IMPORT.activeBitmaps.indexOf(bmp);
+    if (i >= 0) IMPORT.activeBitmaps.splice(i, 1);
+    if (bmp && bmp.close) {
+      try { bmp.close(); } catch (e) {}
+    }
+  }
+  function closeAllBitmaps() {
+    var n = IMPORT.activeBitmaps.length;
+    for (var i = 0; i < n; i++) {
+      var b = IMPORT.activeBitmaps[i];
+      if (b && b.close) { try { b.close(); } catch (e) {} }
+    }
+    IMPORT.activeBitmaps = [];
+  }
+
+  // ---- 加载/失败状态卡（非阻塞，替代 alert 主路径） ----
+  function showImportLoading(text) {
+    var card = document.getElementById('import-status');
+    if (!card) return;
+    card.hidden = false;
+    card.className = 'import-status is-loading';
+    card.textContent = text || '导入中…';
+  }
+  function showImportFail(text) {
+    var card = document.getElementById('import-status');
+    IMPORT.failShown = true;
+    if (!card) { appToast(text); return; }
+    card.hidden = false;
+    card.className = 'import-status is-fail';
+    card.textContent = '';
+    var span = document.createElement('span');
+    span.textContent = text;
+    card.appendChild(span);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'import-retry';
+    btn.className = 'import-status__retry';
+    btn.textContent = '再试一次';
+    btn.addEventListener('click', function () {
+      hideImportStatus();
+      if (el.fileInput) el.fileInput.click();
+    });
+    card.appendChild(btn);
+  }
+  function hideImportStatus() {
+    IMPORT.failShown = false;
+    var card = document.getElementById('import-status');
+    if (card) { card.hidden = true; card.textContent = ''; }
+  }
+  function clearImportFail() { hideImportStatus(); }
+
+  async function fileToBitmap(file, runId) {
+    // 优先 createImageBitmap；部分 WebView 对相册 File 解码可能挂起或 reject，
+    // 有界超时后顺序降级到 Image(blob:)，再不行降级 FileReader → dataURL
     //（App 对 blob: 更严时），避免中断导入链路。
+    runId = runId == null ? IMPORT.runId : runId;
+    // 第 1 步：createImageBitmap，有界；超时后置 cibCancelled，
+    // 晚到的结果只 close 不交给业务（不做「CIB 与 Image 双成功竞争」）。
     if (typeof createImageBitmap === 'function') {
+      var cibCancelled = false;
+      var cibPromise = createImageBitmap(file);
+      cibPromise.then(function (bmp) {
+        // 超时降级后晚到的结果：只 close、不交给业务
+        if (cibCancelled) {
+          if (bmp && bmp.close) { try { bmp.close(); } catch (e) {} }
+        }
+      }, function () {
+        // late reject 由 race/sidecar 吞掉，避免 unhandledrejection
+      });
       try {
-        return await createImageBitmap(file);
+        var bmp = await withTimeout(cibPromise, IMPORT.timeouts.cib);
+        if (runId !== IMPORT.runId) {
+          // 迟到结果属于旧 run：close，禁止写入 state
+          if (bmp && bmp.close) { try { bmp.close(); } catch (e) {} }
+          var err = new Error('stale run');
+          err.name = 'StaleRunError';
+          throw err;
+        }
+        registerBitmap(bmp);
+        return bmp;
       } catch (e) {
-        // 降级继续
+        if (e && e.name === 'StaleRunError') throw e;
+        cibCancelled = true; // 先置位，再降级；late CIB 只 close
       }
     }
+    // 第 2 步：Image(blob:)，3000ms 有界；超时 revokeObjectURL 后走第 3 步
+    try {
+      return await decodeViaBlobImage(file, runId);
+    } catch (e) {
+      if (e && e.name === 'StaleRunError') throw e;
+    }
+    // 第 3 步：FileReader → dataURL → Image，整体 5000ms 有界
+    return await decodeViaFileReader(file, runId);
+  }
+
+  function decodeViaBlobImage(file, runId) {
     return new Promise(function (resolve, reject) {
+      var finished = false;
       var url = URL.createObjectURL(file);
       var img = new Image();
+      var to = setTimeout(function () {
+        if (finished) return;
+        finished = true;
+        try { URL.revokeObjectURL(url); } catch (e) {}
+        reject(new Error('image timeout'));
+      }, IMPORT.timeouts.img);
       img.onload = function () {
+        if (finished) return;
+        finished = true;
+        clearTimeout(to);
         URL.revokeObjectURL(url);
+        if (runId !== IMPORT.runId) {
+          var err = new Error('stale run');
+          err.name = 'StaleRunError';
+          reject(err);
+          return;
+        }
         resolve(img);
       };
       img.onerror = function () {
+        if (finished) return;
+        finished = true;
+        clearTimeout(to);
         URL.revokeObjectURL(url);
-        // 再试 FileReader → dataURL（App 对 blob: 更严时）
-        var reader = new FileReader();
-        reader.onload = function () {
-          var img2 = new Image();
-          img2.onload = function () {
-            resolve(img2);
-          };
-          img2.onerror = function () {
-            reject(new Error('图片加载失败'));
-          };
-          img2.src = reader.result;
-        };
-        reader.onerror = function () {
-          reject(new Error('图片加载失败'));
-        };
-        reader.readAsDataURL(file);
+        reject(new Error('image error'));
       };
       img.src = url;
     });
   }
 
+  function decodeViaFileReader(file, runId) {
+    return new Promise(function (resolve, reject) {
+      var finished = false;
+      var fail = function (msg) {
+        if (finished) return;
+        finished = true;
+        clearTimeout(to);
+        reject(new Error(msg));
+      };
+      var to = setTimeout(function () {
+        fail('reader timeout');
+      }, IMPORT.timeouts.reader);
+      var reader = new FileReader();
+      reader.onload = function () {
+        if (finished) return;
+        var img2 = new Image();
+        img2.onload = function () {
+          if (finished) return;
+          finished = true;
+          clearTimeout(to);
+          if (runId !== IMPORT.runId) {
+            var err = new Error('stale run');
+            err.name = 'StaleRunError';
+            reject(err);
+            return;
+          }
+          resolve(img2);
+        };
+        img2.onerror = function () { fail('dataurl image error'); };
+        img2.src = reader.result;
+      };
+      reader.onerror = function () { fail('reader error'); };
+      reader.readAsDataURL(file);
+    });
+  }
+
   function canvasToBlob(canvas, type, quality) {
+    // 同步 toDataURL 主路径（部分 WebView 的 canvas.toBlob 会静默不出回调）：
+    // 校验 data URI 头与 payload，任何一步失败 resolve(null)，消费方按失败处理。
+    var t = type || 'image/jpeg';
+    var q = quality == null ? 0.92 : quality;
     return new Promise(function (resolve) {
-      if (canvas.toBlob) {
-        canvas.toBlob(function (b) {
-          resolve(b || null);
-        }, type || 'image/jpeg', quality == null ? 0.92 : quality);
-      } else {
-        try {
-          var data = canvas.toDataURL(type || 'image/jpeg', quality == null ? 0.92 : quality);
-          var bin = atob(data.split(',')[1] || '');
-          var arr = new Uint8Array(bin.length);
-          for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-          resolve(new Blob([arr], { type: type || 'image/jpeg' }));
-        } catch (e) {
-          resolve(null);
-        }
+      var data;
+      try {
+        data = canvas.toDataURL(t, q);
+      } catch (e) {
+        resolve(null);
+        return;
       }
+      var comma = data.indexOf(',');
+      var head = comma >= 0 ? data.slice(0, comma) : '';
+      var payload = comma >= 0 ? data.slice(comma + 1) : '';
+      if (!/^data:image\/[a-z0-9.+-]+;base64$/i.test(head) || !payload) {
+        resolve(null);
+        return;
+      }
+      var bin, arr;
+      try {
+        bin = atob(payload);
+        arr = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      } catch (e2) {
+        resolve(null);
+        return;
+      }
+      var blob;
+      try {
+        blob = new Blob([arr], { type: t });
+      } catch (e3) {
+        resolve(null);
+        return;
+      }
+      resolve(blob);
     });
   }
 
@@ -417,7 +667,78 @@
     return runs;
   }
 
-  function findCoverBlocksInColumn(data, imgW, imgH, x0, x1) {
+  // True when a near-empty gap is a pure-white interior seam (merge the
+  // blocks it separates) rather than containing gray page-gutter rows
+  // (real card boundary). Per-row test: white padding around a card
+  // boundary must not dilute a gutter row (~250 across ~97% of the column)
+  // into passing; light JPEG halos around dark cover edges stay well under.
+  function gapIsWhiteSeam(data, imgW, gy0, gy1, x0, x1) {
+    var found = false;
+    for (var y = gy0; y <= gy1; y += PROJ_STEP) {
+      found = true;
+      if (gutterFracInXRange(data, imgW, y, x0, x1) > 0.6) return false;
+    }
+    return found;
+  }
+
+  // Build density blocks over [x0, x1] and merge neighbours separated by
+  // pure-white interior seams. mergeFromY: gaps starting above it are never
+  // merged (sticky top bar / chrome region where a partial cover may sit
+  // right below the bar — merging there glues unrelated strips together).
+  // Merges that would exceed maxMergedH are refused, so a cover never grows
+  // into the title/author rows of the next card. Each block records its
+  // tallest raw piece: a block made only of short text rows is a caption
+  // strip, not a cover (callers filter it out).
+  function blocksWithWhiteMerge(data, imgW, imgH, dens, x0, x1, mergeFromY, yBase, maxMergedH) {
+    var colW = x1 - x0 + 1;
+    var gapRows = Math.max(4, Math.round(imgH * 0.002));
+    var raw = [];
+    var y = 0;
+    while (y < dens.length) {
+      if (dens[y] > GAP_ROW) {
+        var s = y;
+        var e = y;
+        var run = 0;
+        while (y < dens.length) {
+          if (dens[y] <= GAP_ROW) {
+            run++;
+            if (run >= gapRows) break;
+          } else {
+            run = 0;
+            e = y;
+          }
+          y++;
+        }
+        raw.push({ y0: yBase + s, y1: yBase + e });
+      } else {
+        y++;
+      }
+    }
+    if (maxMergedH == null) {
+      maxMergedH = Math.round(colW * 1.35);
+    }
+    var maxSeam = Math.round(colW * 0.25);
+    var blocks = [];
+    for (var b = 0; b < raw.length; b++) {
+      var blk = raw[b];
+      var prev = blocks.length ? blocks[blocks.length - 1] : null;
+      if (prev) {
+        var gy0 = prev.y1 + 1;
+        var gy1 = blk.y0 - 1;
+        if (gy0 >= mergeFromY && gy1 - gy0 + 1 <= maxSeam &&
+            blk.y1 - prev.y0 + 1 <= maxMergedH &&
+            gapIsWhiteSeam(data, imgW, gy0, gy1, x0, x1)) {
+          prev.y1 = blk.y1;
+          prev.pieces.push(blk.y1 - blk.y0 + 1);
+          continue;
+        }
+      }
+      blocks.push({ y0: blk.y0, y1: blk.y1, pieces: [blk.y1 - blk.y0 + 1] });
+    }
+    return blocks;
+  }
+
+  function findCoverBlocksInColumn(data, imgW, imgH, x0, x1, mergeFromY) {
     var colW = x1 - x0 + 1;
     var dens = [];
     for (var y = 0; y < imgH; y++) {
@@ -430,31 +751,12 @@
       }
       dens.push(cnt / total);
     }
-    var gapRows = Math.max(4, Math.round(imgH * 0.002));
-    var blocks = [];
-    y = 0;
-    while (y < imgH) {
-      if (dens[y] > GAP_ROW) {
-        var s = y;
-        var e = y;
-        var run = 0;
-        while (y < imgH) {
-          if (dens[y] <= GAP_ROW) {
-            run++;
-            if (run >= gapRows) break;
-          } else {
-            run = 0;
-            e = y;
-          }
-          y++;
-        }
-        blocks.push({ y0: s, y1: e });
-      } else {
-        y++;
-      }
+    if (mergeFromY == null) {
+      mergeFromY = Math.max(80, Math.round(imgH * 0.11));
     }
+    var blocks = blocksWithWhiteMerge(data, imgW, imgH, dens, x0, x1, mergeFromY, 0);
     var covers = [];
-    var minCoverH = Math.round(colW * 0.3);
+    var minCoverH = Math.round(colW * 0.35);
     for (var b = 0; b < blocks.length; b++) {
       var blk = blocks[b];
       // Blocks touching the very top are the fixed chrome (status bar, nav,
@@ -464,6 +766,13 @@
       // White-background covers still segment correctly because the gaps
       // around them are pure white while their interior is not.
       if (blk.y1 - blk.y0 + 1 < minCoverH) continue;
+      // A merged block whose every raw piece is short is a caption strip
+      // (title + author rows fused across white gaps), not a cover.
+      var maxPiece = 0;
+      for (var p = 0; p < blk.pieces.length; p++) {
+        if (blk.pieces[p] > maxPiece) maxPiece = blk.pieces[p];
+      }
+      if (maxPiece < Math.round(colW * 0.25)) continue;
       covers.push({ y0: blk.y0, y1: blk.y1 });
     }
     return covers;
@@ -681,6 +990,109 @@
     return tiles;
   }
 
+  // Open-band cover (leading / trailing fallback): when no ~250 gutter
+  // bounds a card above (or cardTilesInBand fails on a white/text cover),
+  // build density blocks and merge across pure-white interior seams. Collage
+  // / text covers often have white gaps >> title-line pad, so a pad-limited
+  // grow from the tallest run stops at the first panel — white-seam merge
+  // with a cover-height cap is the generic fix. Reject blocks glued to the
+  // band top (chrome) and blocks that leave no title/author room at the
+  // band bottom (chrome-cut partials).
+  function coverTileInOpenBand(data, imgW, imgH, band, bx0, bx1) {
+    var colW = bx1 - bx0 + 1;
+    var dens = [];
+    for (var y = band.y0; y <= band.y1; y++) {
+      var cnt = 0;
+      var total = 0;
+      for (var x = bx0; x <= bx1; x += PROJ_STEP) {
+        total++;
+        var i = (y * imgW + x) * 4;
+        if ((data[i] + data[i + 1] + data[i + 2]) / 3 < WHITE_BRIGHT) cnt++;
+      }
+      dens.push(cnt / total);
+    }
+    var chromeTop = Math.max(80, Math.round(imgH * 0.11));
+    var mergeFromY = Math.max(band.y0, chromeTop);
+    // Allow taller merge then trim title/author; collage covers need room
+    // for white interior seams without prematurely hitting maxMergedH.
+    var maxMergedH = Math.round(colW * 1.6);
+    var blocks = blocksWithWhiteMerge(
+      data, imgW, imgH, dens, bx0, bx1, mergeFromY, band.y0, maxMergedH
+    );
+    var pad = Math.round(colW * 0.055);
+    var minCoverH = Math.round(colW * 0.35);
+    var minPiece = Math.round(colW * 0.25);
+    var best = null;
+    for (var b = 0; b < blocks.length; b++) {
+      var blk = blocks[b];
+      if (blk.y0 <= band.y0 + 1) continue;
+      var h = blk.y1 - blk.y0 + 1;
+      if (h < minCoverH) continue;
+      var maxPiece = 0;
+      for (var p = 0; p < blk.pieces.length; p++) {
+        if (blk.pieces[p] > maxPiece) maxPiece = blk.pieces[p];
+      }
+      if (maxPiece < minPiece) continue;
+      if (!best || h > best.h) best = { y0: blk.y0, y1: blk.y1, h: h };
+    }
+    if (!best) return [];
+    // Snap top to the first substantial content piece so chrome/label
+    // crumbs above a short complete cover are not kept.
+    var coverTop = best.y0;
+    var acc = best.y0;
+    // Re-scan pieces via text runs overlapping the block: first run taller
+    // than minPiece becomes the cover top.
+    var allRuns = textRunsInBand(data, imgW, imgH, band, bx0, bx1);
+    for (var ri = 0; ri < allRuns.length; ri++) {
+      if (allRuns[ri].y1 < best.y0 || allRuns[ri].y0 > best.y1) continue;
+      if (allRuns[ri].y1 - allRuns[ri].y0 + 1 >= minPiece) {
+        coverTop = allRuns[ri].y0;
+        break;
+      }
+    }
+    // Trim external title/author/like: only walk short runs in the bottom
+    // caption zone near the gutter. Cover-internal text lines further up
+    // must not be mistaken for the note title (white text covers).
+    var coverBottom = best.y1;
+    var captionZone = band.y1 - Math.round(colW * 0.4);
+    var cap = [];
+    for (ri = 0; ri < allRuns.length; ri++) {
+      if (allRuns[ri].y0 >= captionZone) cap.push(allRuns[ri]);
+    }
+    if (cap.length >= 2) {
+      var idx = cap.length - 1;
+      var titleTop = -1;
+      var lines = 0;
+      while (lines < 2 && idx - 1 >= 0) {
+        var cand = cap[idx - 1];
+        if (cap[idx].y0 - cand.y1 > pad * 1.5) break;
+        if (cand.y1 - cand.y0 + 1 > pad * 1.6) break;
+        titleTop = cand.y0;
+        idx--;
+        lines++;
+      }
+      if (titleTop >= coverTop && titleTop <= best.y1 + pad) {
+        // Cover ends at the last content run above the title cluster.
+        var above = -1;
+        for (ri = 0; ri < allRuns.length; ri++) {
+          if (allRuns[ri].y1 < titleTop && allRuns[ri].y1 > above) {
+            above = allRuns[ri].y1;
+          }
+        }
+        if (above >= coverTop) coverBottom = above;
+        else coverBottom = titleTop - pad;
+      }
+    }
+    if (coverBottom <= coverTop) return [];
+    if (band.y1 - coverBottom < pad * 1.5) return [];
+    if (coverBottom - coverTop + 1 < minCoverH) return [];
+    return [{ x: bx0, w: colW, y0: coverTop, y1: coverBottom, band: band }];
+  }
+
+  function leadingTileInBand(data, imgW, imgH, band, bx0, bx1) {
+    return coverTileInOpenBand(data, imgW, imgH, band, bx0, bx1);
+  }
+
   function detectCardTiles(data, imgW, imgH) {
     var tiles = [];
     var gut = findGutterRuns(data, imgW, imgH);
@@ -709,20 +1121,34 @@
       if (cx1 - cx0 + 1 < minColW) continue;
       var cg = findGutterRunsInCol(data, imgW, imgH, cx0, cx1);
       if (cg.length < 1) continue;
+      // Leading card above the first per-column gutter (mirrors the
+      // trailing case below).
+      var chromeH = Math.max(80, Math.round(imgH * 0.08));
+      if (cg[0].y0 - 1 - chromeH > Math.round(imgW * 0.12)) {
+        var bandL = { y0: chromeH, y1: cg[0].y0 - 1 };
+        tiles = tiles.concat(leadingTileInBand(data, imgW, imgH, bandL, cx0, cx1));
+      }
       for (var g2 = 0; g2 + 1 < cg.length; g2++) {
         var band2 = { y0: cg[g2].y1 + 1, y1: cg[g2 + 1].y0 - 1 };
-        tiles = tiles.concat(cardTilesInBand(data, imgW, imgH, band2, cx0, cx1));
+        var midTiles = cardTilesInBand(data, imgW, imgH, band2, cx0, cx1);
+        if (!midTiles.length) {
+          midTiles = coverTileInOpenBand(data, imgW, imgH, band2, cx0, cx1);
+        }
+        tiles = tiles.concat(midTiles);
       }
       // Trailing card below the last per-column gutter. Bottom cards often
       // have no following ~250 gutter (only title/author white, then the
       // tab-bar chrome), so the between-gutter loop never sees them and the
       // light-cover projection fallback crops an embedded dark island.
-      var chromeH = Math.max(80, Math.round(imgH * 0.08));
       var trailY1 = imgH - 1 - chromeH;
       var lastG = cg[cg.length - 1];
       if (trailY1 - lastG.y1 > Math.round(imgW * 0.12)) {
         var bandT = { y0: lastG.y1 + 1, y1: trailY1 };
-        tiles = tiles.concat(cardTilesInBand(data, imgW, imgH, bandT, cx0, cx1));
+        var trailTiles = cardTilesInBand(data, imgW, imgH, bandT, cx0, cx1);
+        if (!trailTiles.length) {
+          trailTiles = coverTileInOpenBand(data, imgW, imgH, bandT, cx0, cx1);
+        }
+        tiles = tiles.concat(trailTiles);
       }
     }
     return tiles;
@@ -749,7 +1175,11 @@
     }
     for (var c = 0; c < cols.length; c++) {
       var col = cols[c];
-      var blocks = findCoverBlocksInColumn(data, imgW, imgH, col.x0, col.x1);
+      // Merge white seams anywhere below the sticky chrome. Gray page
+      // gutters still refuse merge via gapIsWhiteSeam; do not gate at the
+      // first column gutter or leading collages above it stay oversplit.
+      var mergeFromY = Math.max(80, Math.round(imgH * 0.11));
+      var blocks = findCoverBlocksInColumn(data, imgW, imgH, col.x0, col.x1, mergeFromY);
       for (var b = 0; b < blocks.length; b++) {
         var blk = blocks[b];
         // Blocks already covered by a card tile (its cover spans the whole
@@ -760,7 +1190,11 @@
           var t2 = cardTiles[k2];
           var ovY = Math.min(blk.y1, t2.y1) - Math.max(blk.y0, t2.y0) + 1;
           var ovX = Math.min(col.x1 + 1, t2.x + t2.w) - Math.max(col.x0, t2.x);
-          if (ovX > 0 && ovY > (blk.y1 - blk.y0 + 1) * 0.5) {
+          var blkH = blk.y1 - blk.y0 + 1;
+          var cardH = t2.y1 - t2.y0 + 1;
+          // Half of either side: a projection tail that only partly overlaps
+          // a card (cover fragment + glued title) must still be dropped.
+          if (ovX > 0 && ovY > 0 && (ovY > blkH * 0.3 || ovY > cardH * 0.5)) {
             dup = true;
             break;
           }
@@ -789,11 +1223,15 @@
     return tiles;
   }
 
-  async function sliceFeed(bitmap) {
+  async function sliceFeed(bitmap, runId) {
+    runId = runId == null ? IMPORT.runId : runId;
     var imgW = bitmap.width || bitmap.naturalWidth;
     var imgH = bitmap.height || bitmap.naturalHeight;
     var results = [];
-    if (!imgW || !imgH) return results;
+    if (!imgW || !imgH) {
+      releaseBitmap(bitmap);
+      return results;
+    }
     var data = buildPixelData(bitmap, imgW, imgH);
     var tiles = detectGridCovers(data, imgW, imgH);
     for (var t = 0; t < tiles.length; t++) {
@@ -823,6 +1261,8 @@
       if (a.row !== b.row) return a.row - b.row;
       return a.col - b.col;
     });
+    // 本 bitmap 已切完：用完即 close，从本 run 持有列表移除
+    releaseBitmap(bitmap);
     return results;
   }
 
@@ -843,7 +1283,10 @@
       targetCanvas.height = h;
       var ctx = targetCanvas.getContext('2d');
       ctx.drawImage(bmpOrImg, 0, 0);
-      if (bmpOrImg.close) bmpOrImg.close();
+      releaseBitmap(bmpOrImg);
+    }, function (e) {
+      // 失败路径：fileToBitmap 内部已 close 迟到的 CIB/降级产物，这里只透传
+      throw e;
     });
   }
 
@@ -1019,42 +1462,19 @@
   }
 
   var COVER_TYPES = [
-    {
-      id: 'result',
-      name: '结果展示型',
-      a: { key: 'coreResult', label: '核心结果', ph: '3个月瘦20斤、0粉→10万粉' },
-      b: { key: 'evidence', label: '证据形式', ph: '前后对比照 / 后台数据截图 / 收益图' }
-    },
-    {
-      id: 'emotion',
-      name: '情绪共鸣型',
-      a: { key: 'emotion', label: '主打情绪', ph: '破防——成年人的崩溃是静音的' },
-      b: { key: 'hook', label: '戳人手法', ph: '第一人称独白 / 反问句 / 深夜氛围' }
-    },
-    {
-      id: 'identity',
-      name: '身份认同型',
-      a: { key: 'audience', label: '锁定人群', ph: '30+裸辞的打工人、考研二战的人' },
-      b: { key: 'identityDetail', label: '对号入座细节', ph: '周报、挤地铁、体检报告' }
-    },
-    {
-      id: 'contrast',
-      name: '认知反差型',
-      a: { key: 'contrast', label: '认知反差', ph: '以为多喝水养胃 / 其实喝太多伤肾' },
-      b: { key: 'support', label: '反差支撑', ph: '专业身份 / 具体数据 / 亲身经历' }
-    },
-    {
-      id: 'info',
-      name: '信息差干货型',
-      a: { key: 'benefit', label: '具体好处', ph: '5个免费去水印工具、1个排版公式' },
-      b: { key: 'gap', label: '信息差点', ph: '小众渠道 / 内部规则 / 没人整理过' }
-    }
+    { id: 'result', name: '结果展示型' },
+    { id: 'emotion', name: '情绪共鸣型' },
+    { id: 'identity', name: '身份认同型' },
+    { id: 'contrast', name: '认知反差型' },
+    { id: 'info', name: '信息差干货型' }
   ];
 
-  /** 默认五类命中；否则查自建分类，合成同构 type（表单字段沿用结果展示型），保证能填能存 */
+  /** 默认五类命中；否则查自建分类，合成 custom type。
+   *  已删除的默认/自建类型一律返回 null（不出现、不可选）。
+   *  录入/详情统一仅两字段：headline + whyClick。 */
   function getCoverType(id) {
     for (var i = 0; i < COVER_TYPES.length; i++) {
-      if (COVER_TYPES[i].id === id) return COVER_TYPES[i];
+      if (COVER_TYPES[i].id === id && !isDeletedDefault(COVER_TYPES[i].id)) return COVER_TYPES[i];
     }
     var list = state.customCategories || [];
     for (var j = 0; j < list.length; j++) {
@@ -1062,9 +1482,7 @@
         return {
           id: id,
           name: list[j].name,
-          custom: true,
-          a: { key: 'coreResult', label: '核心结果', ph: '…' },
-          b: { key: 'evidence', label: '证据形式', ph: '…' }
+          custom: true
         };
       }
     }
@@ -1074,7 +1492,9 @@
   function renderCoverTypes() {
     if (!el.noteTypeList) return;
     el.noteTypeList.innerHTML = '';
-    COVER_TYPES.concat(state.customCategories || []).forEach(function (type) {
+    COVER_TYPES.filter(function (t) {
+      return !isDeletedDefault(t.id); // 已删默认类不进录入可选类型
+    }).concat(state.customCategories || []).forEach(function (type) {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'note-type__btn' + (state.coverType === type.id ? ' is-on' : '');
@@ -1094,19 +1514,11 @@
     if (el.noteForm) el.noteForm.hidden = !chosen;
     if (el.btnNoteSkipType) el.btnNoteSkipType.hidden = !!chosen;
     if (!chosen) return;
-    if (el.fieldALabel) el.fieldALabel.textContent = chosen.a.label;
-    if (el.fieldBLabel) el.fieldBLabel.textContent = chosen.b.label;
-    if (el.fieldA) el.fieldA.placeholder = chosen.a.ph;
-    if (el.fieldB) el.fieldB.placeholder = chosen.b.ph;
     if (el.btnTypeBack) el.btnTypeBack.textContent = chosen.name;
   }
 
   function chooseCoverType(id) {
     if (!getCoverType(id)) return;
-    if (state.coverType !== id) {
-      if (el.fieldA) el.fieldA.value = '';
-      if (el.fieldB) el.fieldB.value = '';
-    }
     state.coverType = id;
     renderCoverTypes();
     showNoteStep();
@@ -1115,8 +1527,6 @@
 
   function clearCoverType() {
     state.coverType = '';
-    if (el.fieldA) el.fieldA.value = '';
-    if (el.fieldB) el.fieldB.value = '';
     renderCoverTypes();
     showNoteStep();
     if (window.scrollTo) window.scrollTo(0, 0);
@@ -1148,10 +1558,7 @@
       (state.noteIndex + 1) + ' / ' + state.noteQueue.length;
     state.coverType = '';
     if (el.fieldHeadline) el.fieldHeadline.value = '';
-    el.fieldWhy.value = '';
-    if (el.fieldA) el.fieldA.value = '';
-    if (el.fieldB) el.fieldB.value = '';
-    if (el.fieldExtra) el.fieldExtra.value = '';
+    if (el.fieldWhy) el.fieldWhy.value = '';
     renderCoverTypes();
     showNoteStep();
     el.noteCover.innerHTML = '';
@@ -1179,15 +1586,13 @@
         height: item.height,
         coverType: type.id,
         headline: el.fieldHeadline ? (el.fieldHeadline.value || '').trim() : '',
-        whyClick: (el.fieldWhy.value || '').trim(),
-        extra: el.fieldExtra ? (el.fieldExtra.value || '').trim() : '',
+        whyClick: el.fieldWhy ? (el.fieldWhy.value || '').trim() : '',
         tags: [],
         category: type.name,
         liked: false,
         createdAt: Date.now()
       };
-      record[type.a.key] = el.fieldA ? (el.fieldA.value || '').trim() : '';
-      record[type.b.key] = el.fieldB ? (el.fieldB.value || '').trim() : '';
+      // 旧库若已有 a/b/extra 字段保留不删；新保存只写 headline + whyClick
       try {
         var db = await openDb();
         await idbPut(db, record);
@@ -1325,7 +1730,7 @@
       if (includeEmpty && name && counts[name] == null) counts[name] = 0;
     });
     return Object.keys(counts).filter(function (name) {
-      return name && name !== UNCATEGORIZED;
+      return name && name !== UNCATEGORIZED && !isDeletedCategoryName(name);
     }).sort(function (a, b) {
       if (counts[b] !== counts[a]) return counts[b] - counts[a];
       return a < b ? -1 : a > b ? 1 : 0;
@@ -1349,6 +1754,7 @@
 
   function rememberCategory(name) {
     if (!name) return;
+    if (isDeletedCategoryName(name)) return; // 已删类型名不再补回
     if (state.extraCategories.indexOf(name) === -1) state.extraCategories.push(name);
   }
 
@@ -1454,10 +1860,12 @@
   function libFilterNames() {
     var names = ['全部'];
     COVER_TYPES.forEach(function (t) {
+      if (isDeletedDefault(t.id)) return; // 已删默认类不出现在筛选条
       if (names.indexOf(t.name) === -1) names.push(t.name);
     });
     (state.customCategories || []).forEach(function (c) {
-      if (c.name && names.indexOf(c.name) === -1) names.push(c.name);
+      if (!c.name || isDeletedCategoryName(c.name)) return;
+      if (names.indexOf(c.name) === -1) names.push(c.name);
     });
     return names;
   }
@@ -1534,6 +1942,10 @@
       return;
     }
     // 与默认类型或已有自定义重名（忽略多余空白）：关闭并选中已有
+    if (isDeletedCategoryName(name)) {
+      if (el.catSheetMsg) el.catSheetMsg.textContent = '「' + name + '」已在管理类型里删除，换个名字吧';
+      return;
+    }
     var existing = null;
     COVER_TYPES.forEach(function (t) {
       if (!existing && normalizeCategoryName(t.name) === name) existing = t.name;
@@ -1558,6 +1970,65 @@
     persistCustomCategories();
     closeCatSheet();
     renderLibrary();
+  }
+
+  // —— 管理类型面板（type-sheet）：默认五类 + 自建均可删，只删类型不删封面 ——
+
+  function openTypeSheet() {
+    if (!el.typeSheet) return;
+    renderTypeSheet();
+    el.typeSheet.hidden = false;
+  }
+
+  function closeTypeSheet() {
+    if (!el.typeSheet) return;
+    el.typeSheet.hidden = true;
+  }
+
+  function renderTypeSheet() {
+    if (!el.typeSheetList) return;
+    el.typeSheetList.innerHTML = '';
+    var counts = categoryCounts();
+    var rows = [];
+    COVER_TYPES.forEach(function (t) {
+      if (!isDeletedDefault(t.id)) rows.push({ id: t.id, name: t.name, kind: '默认', count: counts[t.name] || 0 });
+    });
+    (state.customCategories || []).forEach(function (c) {
+      if (!isDeletedCategoryName(c.name)) rows.push({ id: c.id, name: c.name, kind: '自建', count: counts[c.name] || 0 });
+    });
+    if (!rows.length) {
+      var p = document.createElement('p');
+      p.className = 'type-sheet__empty';
+      p.textContent = '暂无类型';
+      el.typeSheetList.appendChild(p);
+      return;
+    }
+    rows.forEach(function (r) {
+      var row = document.createElement('div');
+      row.className = 'type-sheet__row';
+      var body = document.createElement('div');
+      body.className = 'type-sheet__body';
+      var name = document.createElement('b');
+      name.textContent = r.name;
+      var meta = document.createElement('small');
+      meta.textContent = r.kind + ' · ' + r.count + ' 张';
+      body.appendChild(name);
+      body.appendChild(meta);
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'type-sheet__del';
+      del.textContent = '删除';
+      del.addEventListener('click', function () {
+        askConfirm(
+          '删除类型「' + r.name + '」？',
+          function () { deleteCoverType(r.id); },
+          '类型删除后：封面不会删除，自动保留在「最近收藏」；之后可重新分类。'
+        );
+      });
+      row.appendChild(body);
+      row.appendChild(del);
+      el.typeSheetList.appendChild(row);
+    });
   }
 
   function buildLibRow(sec) {
@@ -1695,17 +2166,11 @@
 
   function sheetSnapshot(item) {
     var type = getCoverType(item && item.coverType);
-    var snap = {
+    return {
       coverType: type ? type.id : '',
       headline: String((item && item.headline) || ''),
-      whyClick: String((item && item.whyClick) || ''),
-      extra: legacyExtra(item)
+      whyClick: String((item && item.whyClick) || '')
     };
-    if (type) {
-      snap[type.a.key] = String(item[type.a.key] || '');
-      snap[type.b.key] = String(item[type.b.key] || '');
-    }
-    return snap;
   }
 
   function sheetNorm(value) {
@@ -1815,10 +2280,8 @@
     });
   }
 
-  /** Detail sheet mirrors the note page: 封面主文案 → 为什么想点 →
-   *  the record's own type's two fields → 补充想法. Legacy records
-   *  without a coverType only show the common fields (their old
-   *  feeling/structure/learnable text lives in extra). */
+  /** Detail sheet mirrors the note page: only 封面主文案 + 为什么想点.
+   *  Legacy a/b/extra stay in IndexedDB untouched; not shown for edit. */
   function fillSheetFields(item) {
     if (!el.sheetFields || !item || !state.sheetDraft) return;
     el.sheetFields.innerHTML = '';
@@ -1826,11 +2289,6 @@
     if (type) sheetAddType(el.sheetFields, type.name);
     sheetAddEditor(el.sheetFields, '封面主文案', 'headline');
     sheetAddEditor(el.sheetFields, '为什么想点', 'whyClick');
-    if (type) {
-      sheetAddEditor(el.sheetFields, type.a.label, type.a.key);
-      sheetAddEditor(el.sheetFields, type.b.label, type.b.key);
-    }
-    sheetAddEditor(el.sheetFields, '补充想法', 'extra');
     sheetAddField(el.sheetFields, '保存', formatSavedAt(item.createdAt));
     syncSheetSaveBtn();
   }
@@ -1942,26 +2400,12 @@
     if (dy > 72) closeLibrarySheet();
   }
 
-  // ——— Fullscreen viewer + long-press action ring ———
-  // 点击库卡片进入全屏查看（纯图无文字）；长按 350ms 从按压点弹出
-  // 喜欢/导出/查看描述三个圆形按钮，按住拖动时按钮围绕手指重排，
-  // 离手指最近的按钮放大反色，松手在其上即触发。
+  // ——— Fullscreen viewer + 底部固定四钮横排 ———
+  // 点击库卡片进入全屏查看（纯图无文字）；顶栏返回/点空白关闭，
+  // 横滑切换；底部固定「喜欢/导出/查详情/删除」四钮 click 直接触发。
 
-  var LONGPRESS_MS = 350;
-  var RING_RADIUS = 86;    // 按压点到按钮中心距离
-  var RING_ARC = 50;       // 相邻按钮夹角
-  var RING_SIZE = 48;      // 按钮直径
-  var RING_FOLLOW = 170;   // 手指滑出此半径后，操作环整体重新锚定到手指
-  var RING_TRIGGER_MAX = 170; // 松手时与选中按钮的最大距离，超过则视为取消
-
-  var viewerPress = null;  // {x,y,t,moved,long,timer,id}
-  var ringState = null;    // {px,py,hot,buttons,targets,tapPick}
+  var viewerPress = null;  // {x,y,t,moved,id,onBar}
   var toastTimer = 0;
-  var ringClickShieldUntil = 0; // resolve 后短暂吞掉合成 click，防幽灵点击误关查看器
-
-  function shieldGhostClick() {
-    ringClickShieldUntil = Date.now() + 420;
-  }
 
   var askShieldUntil = 0; // ask 开窗武装期：吞掉开窗瞬间落下的幽灵 click/pointerup/touchend
 
@@ -1983,35 +2427,77 @@
     return libraryItemById(state.viewerId);
   }
 
-  function svgIcon(kind) {
+  // ——— 照着做入口 ———
+  // 把当前封面的 blob 转参考层图 + 自动取纸底色，交给 FollowMake 编辑器（内存编辑，不写库）。
+
+  /** 对封面四边/角采样：取出现最多且亮度足够的浅色作为画布纸底色 */
+  function sampleCoverBg(blob) {
+    var canvas = document.createElement('canvas');
+    return paintBlobToCanvas(blob, canvas).then(function () {
+      var ctx = canvas.getContext('2d');
+      var w = canvas.width, h = canvas.height;
+      if (!w || !h) return '#FCF8ED';
+      var m = 6;
+      var counts = {};
+      for (var i = 0; i < m; i++) {
+        var t = i / (m - 1);
+        // 四边各 6 点 + 四角
+        var pts = [
+          [Math.round(t * (w - 1)), 0], [Math.round(t * (w - 1)), h - 1],
+          [0, Math.round(t * (h - 1))], [w - 1, Math.round(t * (h - 1))]
+        ];
+        for (var j = 0; j < pts.length; j++) {
+          var d = ctx.getImageData(pts[j][0], pts[j][1], 1, 1).data;
+          if (d[3] < 128) continue;
+          var lum = 0.299 * d[0] + 0.587 * d[1] + 0.114 * d[2];
+          if (lum < 180) continue; // 只要浅色
+          var key = ((d[0] >> 4) << 8) | ((d[1] >> 4) << 4) | (d[2] >> 4);
+          var c = counts[key] || (counts[key] = { n: 0, r: 0, g: 0, b: 0 });
+          c.n++; c.r += d[0]; c.g += d[1]; c.b += d[2];
+        }
+      }
+      var best = null;
+      Object.keys(counts).forEach(function (k) {
+        if (!best || counts[k].n > counts[best].n) best = k;
+      });
+      if (!best) return '#FCF8ED';
+      var c = counts[best];
+      function hx(v) {
+        var s = Math.round(c[v] / c.n).toString(16);
+        return s.length < 2 ? '0' + s : s;
+      }
+      return '#' + hx('r') + hx('g') + hx('b');
+    }).catch(function () {
+      return '#FCF8ED';
+    });
+  }
+
+  /** 打开「照着做」编辑器：参考层 = 封面 objectURL，不丢查看器/弹层状态 */
+  function startFollowMake(item) {
+    if (!item || !item.imageBlob || !window.FollowMake) return;
+    var URL_ = window.URL || window.webkitURL;
+    var refUrl = URL_.createObjectURL(item.imageBlob);
+    sampleCoverBg(item.imageBlob).then(function (bg) {
+      window.FollowMake.open({
+        refSrc: refUrl,
+        bgColor: bg,
+        headline: item.headline || '',
+        whyClick: item.whyClick || '',
+        title: item.headline || ''
+      });
+    });
+  }
+
+  /** 圆润软心（2026-11-04 用户选定），随容器 currentColor 上色（库卡片角标用） */
+  function svgIcon() {
     var ns = 'http://www.w3.org/2000/svg';
     var svg = document.createElementNS(ns, 'svg');
-    if (kind === 'heart-fill') {
-      // 圆润软心（2026-11-04 用户选定），随容器 currentColor 上色
-      svg.setAttribute('viewBox', '0 0 24 24');
-      svg.setAttribute('aria-hidden', 'true');
-      var hf = document.createElementNS(ns, 'path');
-      hf.setAttribute('fill', 'currentColor');
-      hf.setAttribute('d', 'M12 20.7c-.42 0-.84-.15-1.17-.44C6.5 16.6 2.6 13.1 2.6 9.1 2.6 6.2 4.8 4.1 7.4 4.1c1.86 0 3.55 1.03 4.6 2.72 1.05-1.69 2.74-2.72 4.6-2.72 2.6 0 4.8 2.1 4.8 5 0 4-3.9 7.5-8.43 11.16-.33.29-.75.44-1.17.44z');
-      svg.appendChild(hf);
-      return svg;
-    }
-    svg.setAttribute('viewBox', '0 0 20 20');
+    svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('aria-hidden', 'true');
-    var p = document.createElementNS(ns, 'path');
-    if (kind === 'like') {
-      p.setAttribute('d', 'M10 16.6S3.6 12.4 1.9 8.4C.9 6 2.4 3.4 5 3.4c1.9 0 3.4 1.1 5 3 1.6-1.9 3.1-3 5-3 2.6 0 4.1 2.6 3.1 5-1.7 4-8.1 8.2-8.1 8.2z');
-    } else if (kind === 'export') {
-      p.setAttribute('d', 'M10 12.3V3.6M6.4 7.2 10 3.6l3.6 3.6M4.6 12.5v3.1a1 1 0 0 0 1 1h8.8a1 1 0 0 0 1-1v-3.1');
-    } else {
-      p.setAttribute('d', 'M4.6 4.2h10.8c.7 0 1.2.5 1.2 1.2v6.2c0 .7-.5 1.2-1.2 1.2H9.4l-3.6 3v-3H4.6c-.7 0-1.2-.5-1.2-1.2V5.4c0-.7.5-1.2 1.2-1.2z');
-    }
-    p.setAttribute('fill', 'none');
-    p.setAttribute('stroke', 'currentColor');
-    p.setAttribute('stroke-width', '1.6');
-    p.setAttribute('stroke-linecap', 'round');
-    p.setAttribute('stroke-linejoin', 'round');
-    svg.appendChild(p);
+    var hf = document.createElementNS(ns, 'path');
+    hf.setAttribute('fill', 'currentColor');
+    hf.setAttribute('d', 'M12 20.7c-.42 0-.84-.15-1.17-.44C6.5 16.6 2.6 13.1 2.6 9.1 2.6 6.2 4.8 4.1 7.4 4.1c1.86 0 3.55 1.03 4.6 2.72 1.05-1.69 2.74-2.72 4.6-2.72 2.6 0 4.8 2.1 4.8 5 0 4-3.9 7.5-8.43 11.16-.33.29-.75.44-1.17.44z');
+    svg.appendChild(hf);
     return svg;
   }
 
@@ -2020,7 +2506,7 @@
     var vh = canvas.height;
     if (!vw || !vh) return null;
     var maxW = window.innerWidth * 0.88;
-    var maxH = window.innerHeight * 0.74;
+    var maxH = window.innerHeight * 0.62; // 给顶栏/底栏留空，封面不被遮挡
     var s = Math.min(maxW / vw, maxH / vh);
     return { w: Math.round(vw * s), h: Math.round(vh * s) };
   }
@@ -2045,14 +2531,14 @@
     });
   }
 
+  /** 底栏喜欢钮状态：已喜欢时心形填珊瑚红实心 */
   function syncViewerLike(item) {
-    if (el.viewerLike) el.viewerLike.hidden = !(item && item.liked);
+    if (el.viewerLike) el.viewerLike.classList.toggle('is-liked', !!(item && item.liked));
   }
 
   function openViewer(item, fromRect) {
     if (!el.imgViewer || !item || !item.imageBlob) return;
     hideTabs();
-    dismissRing();
     state.viewerId = item.id;
     var list = state.library || [];
     state.viewerIndex = list.indexOf(item);
@@ -2091,8 +2577,6 @@
 
   function closeViewer() {
     if (!state.viewerId || !el.imgViewer || el.imgViewer.hidden) return;
-    dismissRing();
-    if (viewerPress && viewerPress.timer) clearTimeout(viewerPress.timer);
     viewerPress = null;
     state.viewerId = null;
     el.imgViewer.classList.add('is-closing');
@@ -2117,56 +2601,7 @@
     syncViewerLike(item);
   }
 
-  // —— 操作环 ——
-
-  function buildRingButtons() {
-    el.actionRing.innerHTML = '';
-    var defs = [
-      { key: 'like', label: '喜欢' },
-      { key: 'export', label: '导出' },
-      { key: 'desc', label: '查看描述' }
-    ];
-    return defs.map(function (d) {
-      var b = document.createElement('span');
-      b.className = 'ring-btn';
-      b.setAttribute('role', 'button');
-      b.setAttribute('aria-label', d.label);
-      b.appendChild(svgIcon(d.key));
-      el.actionRing.appendChild(b);
-      return { key: d.key, el: b };
-    });
-  }
-
-  // 按压点在中下部时扇形朝上展开，在上部时朝下；方向在触发时锁定
-  function ringTargets(px, py, base) {
-    var m = RING_SIZE / 2 + 10;
-    var topM = 64;
-    var bottomM = m + 26;
-    var keys = ['like', 'export', 'desc'];
-    return keys.map(function (key, i) {
-      var ang = (base + (i - 1) * RING_ARC) * Math.PI / 180;
-      var x = px + Math.cos(ang) * RING_RADIUS;
-      var y = py + Math.sin(ang) * RING_RADIUS;
-      x = Math.min(window.innerWidth - m, Math.max(m, x));
-      y = Math.min(window.innerHeight - bottomM, Math.max(topM, y));
-      return { key: key, x: x, y: y };
-    });
-  }
-
-  function placeRing(targets, hotKey, entering) {
-    if (!ringState) return;
-    ringState.targets = targets;
-    targets.forEach(function (t, i) {
-      var b = ringState.buttons[i];
-      if (!b) return;
-      var s = hotKey === t.key ? 1.38 : 1;
-      b.el.style.transitionDelay = entering ? (i * 40) + 'ms' : '0ms';
-      b.el.style.opacity = '1';
-      b.el.style.transform =
-        'translate3d(' + (t.x - RING_SIZE / 2) + 'px,' + (t.y - RING_SIZE / 2) + 'px,0) scale(' + s + ')';
-      b.el.classList.toggle('is-hot', hotKey === t.key);
-    });
-  }
+  // —— 底栏四钮 ——
 
   /** 触感反馈：容器 vibrateShort(9.50+) 优先，网页/低版本回退 navigator.vibrate */
   function hapticTick() {
@@ -2180,139 +2615,17 @@
     try { if (navigator.vibrate) navigator.vibrate(12); } catch (e2) {}
   }
 
-  function fireRing(px, py) {
-    if (!el.actionRing || !state.viewerId) return;
+  /** 底栏按钮 click 分发：复用原操作环四动作，不改业务语义 */
+  function onViewerBarButton(action) {
+    if (!state.viewerId) return;
     hapticTick();
-    var base = py > window.innerHeight * 0.45 ? -90 : 90;
-    ringState = {
-      px: px,
-      py: py,
-      base: base,
-      anchorX: px,
-      anchorY: py,
-      hot: null,
-      buttons: buildRingButtons(),
-      targets: null
-    };
-    el.actionRing.hidden = false;
-    ringState.buttons.forEach(function (b, i) {
-      b.el.style.transitionDelay = (i * 40) + 'ms';
-      b.el.style.opacity = '0';
-      b.el.style.transform =
-        'translate3d(' + (px - RING_SIZE / 2) + 'px,' + (py - RING_SIZE / 2) + 'px,0) scale(0.2)';
-    });
-    var targets = ringTargets(px, py, base);
-    if (window.requestAnimationFrame) {
-      window.requestAnimationFrame(function () {
-        placeRing(targets, null, true);
-      });
-    } else {
-      placeRing(targets, null, true);
-    }
+    if (action === 'like') ringLike();
+    else if (action === 'export') ringExport();
+    else if (action === 'desc') ringDesc();
+    else if (action === 'delete') ringDelete();
   }
 
-  function updateRing(px, py) {
-    if (!ringState) return;
-    ringState.px = px;
-    ringState.py = py;
-    // 按钮以按压点为锚静止；手指滑远后整个环重新锚定到手指（方向不变）
-    var far = Math.hypot(px - ringState.anchorX, py - ringState.anchorY) > RING_FOLLOW;
-    if (far) {
-      ringState.anchorX = px;
-      ringState.anchorY = py;
-    }
-    var targets = ringTargets(ringState.anchorX, ringState.anchorY, ringState.base);
-    // 离手指最近的按钮即选中（任意时刻恰有一个高亮）
-    var hot = null;
-    var best = Infinity;
-    targets.forEach(function (t) {
-      var d = Math.hypot(t.x - px, t.y - py);
-      if (d < best) {
-        best = d;
-        hot = t.key;
-      }
-    });
-    ringState.hot = hot;
-    ringState.hotDist = best;
-    placeRing(targets, hot, false);
-  }
-
-  function dismissRing() {
-    if (!el.actionRing) return;
-    el.actionRing.classList.remove('is-tap-pick');
-    if (!ringState) {
-      el.actionRing.hidden = true;
-      return;
-    }
-    var buttons = ringState.buttons;
-    var targets = ringState.targets;
-    ringState = null;
-    buttons.forEach(function (b, i) {
-      var t = targets ? targets[i] : null;
-      b.el.style.transitionDelay = '0ms';
-      b.el.style.opacity = '0';
-      b.el.style.transform = t
-        ? 'translate3d(' + (t.x - RING_SIZE / 2) + 'px,' + (t.y - RING_SIZE / 2) + 'px,0) scale(0.35)'
-        : 'scale(0.35)';
-    });
-    setTimeout(function () {
-      if (!ringState && el.actionRing) {
-        el.actionRing.hidden = true;
-        el.actionRing.innerHTML = '';
-      }
-    }, 190);
-  }
-
-  function resolveRing(ev) {
-    var st = ringState;
-    if (!st) return;
-    if (st.tapPick) {
-      // 点选模式下在按钮之外松手：视为放弃，收环
-      dismissRing();
-      shieldGhostClick();
-      return;
-    }
-    var hot = st.hot;
-    var hotDist = st.hotDist;
-    // 触摸上松手时未选中任何按钮：保持环可见，切换为点选模式
-    if (!hot || hotDist > RING_TRIGGER_MAX) {
-      if (ev && ev.pointerType === 'touch') {
-        st.tapPick = true;
-        st.hot = null;
-        st.hotDist = Infinity;
-        el.actionRing.classList.add('is-tap-pick');
-        // 不能 shield：否则随后 420ms 内的点选 click 会被捕获拦截
-        return;
-      }
-      dismissRing();
-      // 手指离选中按钮过远时视为取消，避免误触
-      return;
-    }
-    dismissRing();
-    shieldGhostClick();
-    if (hot === 'like') ringLike();
-    else if (hot === 'export') ringExport();
-    else if (hot === 'desc') ringDesc();
-  }
-
-  // 点选模式：点某个环按钮直接执行该动作
-  function onRingButtonClick(ev) {
-    var btn = ev.target && ev.target.closest ? ev.target.closest('.ring-btn') : null;
-    if (!btn || !ringState || !ringState.tapPick) return;
-    ev.stopPropagation();
-    ev.preventDefault();
-    var key = null;
-    for (var i = 0; i < ringState.buttons.length; i++) {
-      if (ringState.buttons[i].el === btn) { key = ringState.buttons[i].key; break; }
-    }
-    dismissRing();
-    shieldGhostClick();
-    if (key === 'like') ringLike();
-    else if (key === 'export') ringExport();
-    else if (key === 'desc') ringDesc();
-  }
-
-  // —— 三个动作 ——
+  // —— 四个动作 ——
 
   function ringLike() {
     var item = viewerItem();
@@ -2330,6 +2643,24 @@
     });
   }
 
+  /** 底栏删除钮：二次确认后才删当前查看的封面（取消保留） */
+  function ringDelete() {
+    var item = viewerItem();
+    if (!item) return;
+    askConfirm('确定删除这张？', function () {
+      var id = item.id;
+      openDb().then(function (db) {
+        return idbDelete(db, id).then(function () {
+          db.close();
+          closeViewer();
+          return refreshLibrary();
+        });
+      }).catch(function () {
+        alert('删除失败');
+      });
+    });
+  }
+
   function exportFileName() {
     var d = new Date();
     function p(n) { return n < 10 ? '0' + n : '' + n; }
@@ -2338,7 +2669,6 @@
   }
 
   function ringExport() {
-    shieldGhostClick(); // 双保险：防 tap-pick/长按松手的合成 click 落进刚打开的 ask
     askConfirm('下载这张？', doRingExport);
   }
 
@@ -2507,47 +2837,33 @@
     }, 1100);
   }
 
-  // —— 查看器手势：点按关闭 / 横滑切换 / 长按呼出 ——
+  // —— 查看器手势：点空白关闭 / 横滑切换（顶栏/底栏交给 click，不参与手势） ——
 
   function onViewerPointerDown(ev) {
     if (!state.viewerId || !el.imgViewer || el.imgViewer.hidden) return;
-    if (el.ask && !el.ask.hidden) return; // ask 弹层打开期间暂停查看器手势，避免误关/拆环
-    if (ringState && ringState.tapPick) {
-      // 点选模式：点在环按钮上交给 click 处理；点空白处则收环
-      var btn = ev.target && ev.target.closest ? ev.target.closest('.ring-btn') : null;
-      if (btn) return;
-      dismissRing();
-      shieldGhostClick();
-      return;
-    }
+    if (el.ask && !el.ask.hidden) return; // ask 弹层打开期间暂停查看器手势，避免误关
     viewerPress = {
       x: ev.clientX,
       y: ev.clientY,
       t: Date.now(),
       moved: false,
       id: ev.pointerId,
-      timer: 0
+      // 起点在顶栏/底栏上：交给按钮 click，不关闭不切换
+      onBar: !!(ev.target && ev.target.closest &&
+        ev.target.closest('.viewer-bar, .viewer-topbar'))
     };
+    if (viewerPress.onBar) return; // 不抢 pointer capture，保证按钮正常 click
     if (el.imgViewer.setPointerCapture) {
       try { el.imgViewer.setPointerCapture(ev.pointerId); } catch (e) {}
     }
-    viewerPress.timer = setTimeout(function () {
-      if (!viewerPress || viewerPress.moved) return;
-      fireRing(viewerPress.x, viewerPress.y);
-    }, LONGPRESS_MS);
   }
 
   function onViewerPointerMove(ev) {
     if (!viewerPress || ev.pointerId !== viewerPress.id) return;
-    if (ringState) {
-      updateRing(ev.clientX, ev.clientY);
-      return;
-    }
     var dx = ev.clientX - viewerPress.x;
     var dy = ev.clientY - viewerPress.y;
     if (!viewerPress.moved && Math.hypot(dx, dy) > 10) {
       viewerPress.moved = true;
-      if (viewerPress.timer) clearTimeout(viewerPress.timer);
     }
   }
 
@@ -2556,14 +2872,10 @@
     if (el.ask && !el.ask.hidden) { viewerPress = null; return; } // ask 打开期间不动查看器状态
     var p = viewerPress;
     viewerPress = null;
-    if (p.timer) clearTimeout(p.timer);
-    if (ringState) {
-      resolveRing(ev);
-      return;
-    }
+    if (p.onBar) return; // 底栏/顶栏按钮 click 已自行处理
     var dx = ev.clientX - p.x;
     var dy = ev.clientY - p.y;
-    if (!p.moved && Date.now() - p.t < LONGPRESS_MS) {
+    if (!p.moved && Date.now() - p.t < 500) {
       closeViewer();
       return;
     }
@@ -2573,48 +2885,104 @@
   }
 
   function onViewerPointerCancel() {
-    // 触摸长按可能被系统接管而触发 pointercancel：
-    // 环已弹出时不能拆环，改为进入点选模式保留按钮
-    if (ringState) {
-      if (!ringState.tapPick) {
-        ringState.tapPick = true;
-        ringState.hot = null;
-        ringState.hotDist = Infinity;
-        el.actionRing.classList.add('is-tap-pick');
-      }
-    } else {
-      if (viewerPress && viewerPress.timer) clearTimeout(viewerPress.timer);
-    }
-    // cancel 后通常没有配套 pointerup，必须清掉长按状态避免误触
+    // cancel 后通常没有配套 pointerup，清掉按压状态避免误触
     viewerPress = null;
   }
 
 
+  // 导入总入口（含锁 + runId + 总闸）。失败/成功都保证清 busy，
+  // 绝不永久卡 loading；失败出口走页面内状态卡，不用 alert 主路径。
   async function onFilesChosen(fileList) {
-    var files = Array.prototype.slice.call(fileList || []).filter(isImageFile);
-    if (!files.length) {
-      safeAlert('请选择图片文件');
+    // 入口分流：先判 busy，再判空 —— 不用 fileList||[] 吞掉真实空选择；
+    // 清 input.value 只发生在 resetPick()，本函数不清不改。
+    var rawEmpty = fileList == null || !fileList.length;
+    if (IMPORT.busy) {
+      appToast('正在导入，请稍候');
+      return; // 不动进行中的 run
+    }
+    if (rawEmpty) {
+      appToast('未获取到文件，请重新选择');
+      return; // 不增 run，不产生假 decode / no-image-file
+    }
+    IMPORT.busy = true;
+    IMPORT.runId++;
+    var runId = IMPORT.runId;
+    closeAllBitmaps(); // 清上一 run 残留
+    clearImportFail();
+    var snapshot = Array.prototype.slice.call(fileList); // snapshot 后才消费，业务引用不再依赖 fileList
+    var accepted = [];
+    for (var k = 0; k < snapshot.length; k++) {
+      if (isImageFile(snapshot[k])) accepted.push(snapshot[k]);
+    }
+    if (!accepted.length) {
+      showImportFail('请选择图片文件');
+      IMPORT.busy = false;
       return;
     }
+    var files = accepted;
+    showImportLoading('导入中…');
+    try {
+      await Promise.race([
+        importWork(files, runId),
+        new Promise(function (_resolve, reject) {
+          setTimeout(function () {
+            var err = new Error('import total timeout');
+            err.name = 'TotalTimeoutError';
+            reject(err);
+          }, IMPORT.timeouts.total);
+        })
+      ]);
+    } catch (e) {
+      // 统一失败出口：页面内非阻塞状态卡 + 再试按钮，不依赖 alert 主路径
+      if (e && e.name === 'TotalTimeoutError') {
+        // 总超时：作废本 run（后台残留回调按 stale 丢弃），清理资源
+        closeAllBitmaps();
+        IMPORT.runId++;
+        showImportFail('导入超时，请重试');
+        showPick(false);
+      } else {
+        showImportFail('导入异常，请重试');
+        showPick(false);
+      }
+    } finally {
+      // 若期间用户已开新 run（理论上锁下不可能），不动新 run 的资源
+      if (IMPORT.runId === runId) {
+        closeAllBitmaps();
+        // 失败卡保留给用户看（含「再试一次」），只清 loading
+        if (!IMPORT.failShown) hideImportStatus();
+        IMPORT.busy = false;
+      } else {
+        IMPORT.busy = false;
+      }
+    }
+  }
+
+  async function importWork(files, runId) {
     state.pendingFiles = files;
     state.pendingBitmaps = [];
     // 单张读取失败静默跳过，绝不在这里 alert：
-    // 该路径仍可能 slicePending 成功出结果（如 1/4），而小工具容器对
-    // 异步续体里的原生 alert 有「文案丢失→空白框+红色确定」的桥接缺陷，
-    // 这正是线上空白弹窗的来源。
+    // 该路径仍可能 slicePending 成功出结果（如 1/4）。
     for (var i = 0; i < files.length; i++) {
       try {
-        var bmp = await fileToBitmap(files[i]);
+        var bmp = await fileToBitmap(files[i], runId);
+        if (runId !== IMPORT.runId) {
+          // 旧 run 迟到结果：close，禁止写入 state、禁止 showPick
+          releaseBitmap(bmp);
+          continue;
+        }
         state.pendingBitmaps.push(bmp);
       } catch (e) {
+        if (e && e.name === 'StaleRunError') throw e;
         // 静默跳过无法读取的文件
       }
     }
+    if (runId !== IMPORT.runId) return;
     if (!state.pendingBitmaps.length) {
-      safeAlert('图片读取失败，请换一张截图试试');
+      showImportFail('图片读取失败，请换一张截图试试');
+      showPick(false);
       return;
     }
-    await slicePending();
+    await slicePending(runId);
   }
 
   function resetPick() {
@@ -2622,13 +2990,15 @@
     state.pendingBitmaps = [];
     state.candidates = [];
     state.selectedIds = {};
+    closeAllBitmaps();
     if (el.fileInput) el.fileInput.value = '';
     if (el.pickRail) el.pickRail.innerHTML = '';
     updateSaveSelectedBtn();
     showPick(false);
   }
 
-  async function slicePending() {
+  async function slicePending(runId) {
+    runId = runId == null ? IMPORT.runId : runId;
     if (!state.pendingBitmaps.length) {
       showPick(false);
       return;
@@ -2636,24 +3006,30 @@
     var all = [];
     try {
       for (var i = 0; i < state.pendingBitmaps.length; i++) {
-        var part = await sliceFeed(state.pendingBitmaps[i]);
+        var part = await sliceFeed(state.pendingBitmaps[i], runId);
         all = all.concat(part);
       }
     } catch (e) {
-      // 固定中文前缀，不把可能为空的 e.message 单独 alert
-      safeAlert('切分失败：' + (e && e.message ? e.message : '未知错误'));
+      closeAllBitmaps();
+      // 固定中文前缀，不把可能为空的 e.message 单独弹窗
+      showImportFail('切分失败：' + (e && e.message ? e.message : '未知错误'));
       showPick(false);
+      return;
+    }
+    if (runId !== IMPORT.runId) {
+      // 旧 run 切出的结果丢弃，不写 state、不进 PICK
       return;
     }
     state.candidates = all;
     state.selectedIds = {};
     if (!all.length) {
-      safeAlert('没有切出可用封面，请换一张更接近双列信息流的整屏截图试试');
+      showImportFail('没有切出可用封面，请换一张更接近双列信息流的整屏截图试试');
       showPick(false);
       if (el.pickRail) el.pickRail.innerHTML = '';
       return;
     }
     showView('import');
+    clearImportFail();
     showPick(true);
     renderCandidates();
   }
@@ -2895,30 +3271,21 @@
       lines: ['裸辞3个月', '我后悔了吗'],
       type: 'result',
       headline: '裸辞3个月，我后悔了吗',
-      why: '数字太夸张了、感觉在说我',
-      a: '0粉→10万粉，用了90天',
-      b: '后台数据截图',
-      extra: '高饱和渐变 + 大字标题'
+      why: '数字太夸张了、感觉在说我'
     },
     {
       stops: [['0', '#c2f7d9'], ['0.45', '#8fe3b0'], ['1', '#3f8ef7']],
       lines: ['成年人的崩溃', '是静音的'],
       type: 'emotion',
       headline: '成年人的崩溃，是静音的',
-      why: '第一句就破防了',
-      a: '破防——深夜加班回家的地铁上',
-      b: '第一人称独白 + 深夜氛围',
-      extra: '低饱和冷色 + 大留白'
+      why: '第一句就破防了'
     },
     {
       stops: [['0', '#f7f3c2'], ['0.45', '#f7c94b'], ['1', '#f78c5a']],
       lines: ['以为多喝水养胃', '其实喝太多伤肾'],
       type: 'contrast',
       headline: '以为多喝水养胃，其实伤肾',
-      why: '反常识，想点进去看依据',
-      a: '以为多喝水养胃 / 其实喝太多伤肾',
-      b: '三甲医院医生亲述',
-      extra: '高对比撞色 + 划线纠错排版'
+      why: '反常识，想点进去看依据'
     }
   ];
 
@@ -2944,9 +3311,6 @@
     chooseCoverType(theme.type);
     if (el.fieldHeadline) el.fieldHeadline.value = theme.headline;
     if (el.fieldWhy) el.fieldWhy.value = theme.why;
-    if (el.fieldA) el.fieldA.value = theme.a;
-    if (el.fieldB) el.fieldB.value = theme.b;
-    if (el.fieldExtra) el.fieldExtra.value = theme.extra;
   }
 
   function prepareDemo() {
@@ -3017,6 +3381,7 @@
     el.tabs = $('tabs');
     el.ask = $('ask');
     el.askText = $('ask-text');
+    el.askSub = $('ask-sub');
     el.askCancel = $('ask-cancel');
     el.askOk = $('ask-ok');
     el.askBackdrop = $('ask-backdrop');
@@ -3027,11 +3392,6 @@
     el.noteForm = $('note-form');
     el.fieldHeadline = $('field-headline');
     el.fieldWhy = $('field-why');
-    el.fieldA = $('field-a');
-    el.fieldB = $('field-b');
-    el.fieldALabel = $('field-a-label');
-    el.fieldBLabel = $('field-b-label');
-    el.fieldExtra = $('field-extra');
     el.noteProgress = $('note-progress');
     el.noteCoverWrap = $('note-cover-wrap');
     el.ppCreases = $('pp-creases');
@@ -3074,8 +3434,16 @@
     el.imgViewer = $('img-viewer');
     el.viewerCanvas = $('viewer-canvas');
     el.viewerLike = $('viewer-like');
-    el.actionRing = $('action-ring');
+    el.viewerBack = $('viewer-back');
+    el.viewerFollow = $('viewer-follow');
+    el.sheetFollow = $('sheet-follow');
+    el.viewerBar = $('viewer-bar');
     el.viewerToast = $('viewer-toast');
+    el.btnLibManage = $('btn-lib-manage');
+    el.typeSheet = $('type-sheet');
+    el.typeSheetList = $('type-sheet-list');
+    el.typeSheetClose = $('type-sheet-close');
+    el.typeSheetBackdrop = $('type-sheet-backdrop');
 
     qsAll('.tab').forEach(function (tab) {
       tab.addEventListener('click', function () {
@@ -3093,7 +3461,9 @@
     });
 
     el.fileInput.addEventListener('change', function () {
-      onFilesChosen(el.fileInput.files);
+      onFilesChosen(el.fileInput.files).catch(function () {
+        showImportFail('导入异常，请重试');
+      });
     });
 
     el.btnNote.addEventListener('click', function () {
@@ -3146,6 +3516,13 @@
         openCatSheet();
       });
     }
+    if (el.btnLibManage) {
+      el.btnLibManage.addEventListener('click', function () {
+        openTypeSheet();
+      });
+    }
+    if (el.typeSheetClose) el.typeSheetClose.addEventListener('click', closeTypeSheet);
+    if (el.typeSheetBackdrop) el.typeSheetBackdrop.addEventListener('click', closeTypeSheet);
     if (el.catSheetCancel) el.catSheetCancel.addEventListener('click', closeCatSheet);
     if (el.catSheetBackdrop) el.catSheetBackdrop.addEventListener('click', closeCatSheet);
     if (el.catSheetOk) el.catSheetOk.addEventListener('click', submitCatSheet);
@@ -3236,9 +3613,9 @@
       }
       el.imgViewer.addEventListener('touchstart', function (ev) {
         if (!viewerVisible()) return;
-        // 点选模式下点环按钮需保留原生 click（preventDefault 会吞掉 click）
-        if (ringState && ringState.tapPick && ev.target &&
-            ev.target.closest && ev.target.closest('.ring-btn')) return;
+        // 顶栏/底栏按钮需保留原生 click（preventDefault 会吞掉 click）
+        if (ev.target && ev.target.closest &&
+            ev.target.closest('.viewer-bar, .viewer-topbar')) return;
         ev.preventDefault();
         ev.stopPropagation();
       }, { passive: false });
@@ -3248,30 +3625,46 @@
       el.imgViewer.addEventListener('dragstart', function (ev) {
         if (viewerVisible()) ev.preventDefault();
       });
-      // 环 resolve 后短暂吞掉随后的 click，防长按松手的幽灵点击误关查看器
-      el.imgViewer.addEventListener('click', function (ev) {
-        if (Date.now() < ringClickShieldUntil) {
-          // 点选模式下点击环按钮需正常冒泡到 onRingButtonClick，不拦截
-          if (ev.target && ev.target.closest && ev.target.closest('.ring-btn')) return;
-          ev.stopPropagation();
-          ev.preventDefault();
-        }
-      }, true);
     }
 
-    if (el.actionRing) {
-      el.actionRing.addEventListener('click', onRingButtonClick);
+    // 底栏四钮 + 顶栏返回：click 触发，无长按
+    if (el.viewerBar) {
+      el.viewerBar.addEventListener('click', function (ev) {
+        var btn = ev.target && ev.target.closest ? ev.target.closest('.viewer-bar__btn') : null;
+        if (!btn) return;
+        ev.stopPropagation();
+        onViewerBarButton(btn.getAttribute('data-action'));
+      });
+    }
+    if (el.viewerBack) {
+      el.viewerBack.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        closeViewer();
+      });
+    }
+
+    // 照着做入口：全屏预览顶栏胶囊 / 查详情弹层主按钮
+    if (el.viewerFollow) {
+      el.viewerFollow.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        startFollowMake(viewerItem());
+      });
+    }
+    if (el.sheetFollow) {
+      el.sheetFollow.addEventListener('click', function () {
+        startFollowMake(libraryItemById(state.sheetId));
+      });
     }
 
     document.addEventListener('keydown', function (ev) {
       if (ev.key !== 'Escape') return;
-      if (ringState) {
-        dismissRing();
-        return;
-      }
       if (!el.libSheet || el.libSheet.hidden) {
         if (el.catSheet && !el.catSheet.hidden) {
           closeCatSheet();
+          return;
+        }
+        if (el.typeSheet && !el.typeSheet.hidden) {
+          closeTypeSheet();
           return;
         }
         if (state.viewerId) closeViewer();
@@ -3342,16 +3735,30 @@
     el.tabs.hidden = true;
   }
 
-  function askConfirm(message, onOk) {
+  /** message 主文案；detail 可选副文案（删除类型时说明封面保留） */
+  function askConfirm(message, onOk, detail) {
     if (!el.ask) return;
     askHandler = onOk;
     if (el.askText) el.askText.textContent = message;
+    if (el.askSub) {
+      if (detail) {
+        el.askSub.textContent = detail;
+        el.askSub.hidden = false;
+      } else {
+        el.askSub.textContent = '';
+        el.askSub.hidden = true;
+      }
+    }
     el.ask.hidden = false;
     armAskShield();
   }
 
   function closeAsk() {
     askHandler = null;
+    if (el.askSub) {
+      el.askSub.textContent = '';
+      el.askSub.hidden = true;
+    }
     if (el.ask) el.ask.hidden = true;
   }
 

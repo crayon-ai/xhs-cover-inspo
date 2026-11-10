@@ -1,3 +1,114 @@
+/*
+ * 字体授权说明（仅文档作用，无运行时效果）：
+ * 本仓库 assets/fonts/SourceHanSansSC-Heavy-title.woff2 为 Source Han Sans SC Heavy
+ * 的字形子集，仅包含标题「小红书封面灵感库」相关字符。
+ * Reserved Font Name 'Source'；Copyright 2014-2025 Adobe。
+ * 以下为官方 LICENSE.txt 全文（SIL Open Font License 1.1），
+ * 来源：https://github.com/adobe-fonts/source-han-sans/blob/release/LICENSE.txt
+ *
+ * ============================================================================
+ * 官方 LICENSE 全文开始
+ * ============================================================================
+ *
+Copyright 2014-2025 Adobe (http://www.adobe.com/), with Reserved Font
+Name 'Source'. Source is a trademark of Adobe in the United States
+and/or other countries.
+
+This Font Software is licensed under the SIL Open Font License,
+Version 1.1.
+
+This license is copied below, and is also available with a FAQ at:
+http://scripts.sil.org/OFL
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font
+creation efforts of academic and linguistic communities, and to
+provide a free and open framework in which fonts may be shared and
+improved in partnership with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded,
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply to
+any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software
+components as distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to,
+deleting, or substituting -- in part or in whole -- any of the
+components of the Original Version, by changing formats or by porting
+the Font Software to a new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed,
+modify, redistribute, and sell modified and unmodified copies of the
+Font Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components, in
+Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the
+corresponding Copyright Holder. This restriction only applies to the
+primary font name as presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created using
+the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+ * ============================================================================
+ * 官方 LICENSE 全文结束
+ * ========================================================================== */
 @font-face {
   font-family: "Source Han Sans SC Title";
   src: url("./assets/fonts/SourceHanSansSC-Heavy-title.woff2") format("woff2");
@@ -2410,15 +2521,15 @@ html.is-note body {
   .pp-creases, .pp-stage, .pp-toast { transition-duration: 0.01s !important; }
 }
 
-/* ——— 全屏封面查看 + 长按操作环 ——— */
+/* ——— 全屏封面查看 · 白底 + 顶栏返回 + 底部固定四钮横排 ——— */
 .img-viewer {
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
   z-index: 30; /* lib-sheet(40) 之下：查看描述时弹层盖在查看器上 */
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  background: rgba(16, 16, 16, 0.88);
+  background: #ffffff;
   animation: viewer-in 220ms var(--ease-out);
   touch-action: none;
   user-select: none;
@@ -2439,13 +2550,59 @@ html.is-note body {
   -webkit-user-drag: none;
 }
 
+/* 顶栏：返回箭头 + 居中标题 */
+.viewer-topbar {
+  flex: 0 0 auto;
+  width: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 56px;
+  padding-top: calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+}
+
+.viewer-topbar__back {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1a1a1a;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viewer-topbar__back svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.viewer-topbar__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111111;
+  letter-spacing: 0.02em;
+}
+
 #viewer-canvas {
+  /* 顶栏与底栏之间居中：flex:1 占位 + margin auto 兜底 */
+  flex: 1 1 auto;
+  margin: auto;
+  min-height: 0;
   max-width: 88vw;
-  max-height: 74vh;
-  max-height: 74dvh;
+  max-height: 62vh;
+  max-height: 62dvh;
   border-radius: 14px;
-  background: #111111;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  background: #ffffff;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
   transition: transform 300ms var(--ease-out), opacity 160ms linear;
   user-select: none;
   -webkit-user-select: none;
@@ -2453,73 +2610,81 @@ html.is-note body {
   pointer-events: none;
 }
 
-.img-viewer__like {
-  position: absolute;
-  top: 16px; /* env 的 Chrome61 基线 */
-  top: calc(16px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
-  left: 16px;
-  color: var(--coral);
-  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.4));
+/* 底部固定四钮横排：白底圆钮 + 灰字标签，删除为珊红 */
+.viewer-bar {
+  flex: 0 0 auto;
+  width: 100%;
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-start;
+  padding: 12px 8px 14px;
+  padding-bottom: calc(14px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  background: #ffffff;
 }
 
-.img-viewer__like svg {
+.viewer-bar__btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #9a9a9a;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+
+.viewer-bar__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  color: #1a1a1a;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  transition: transform 140ms var(--ease-out);
+}
+
+.viewer-bar__btn:active .viewer-bar__icon {
+  transform: scale(0.94);
+}
+
+.viewer-bar__icon svg {
   width: 22px;
   height: 22px;
   display: block;
 }
 
-/* 操作环按钮：定位走 transform，手势统一由查看器处理 */
-.action-ring {
-  position: absolute;
-  top: 0; right: 0; bottom: 0; left: 0;
-  z-index: 4;
-  pointer-events: none;
+.viewer-bar__label {
+  margin-top: 8px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
 }
 
-/* 触摸点选模式：松手未选中时保持环可见，按钮可二次点按选择 */
-.action-ring.is-tap-pick .ring-btn {
-  pointer-events: auto;
-  cursor: pointer;
+/* 删除钮：图标与文字均珊红 */
+.viewer-bar__btn--danger .viewer-bar__icon,
+.viewer-bar__btn--danger .viewer-bar__label {
+  color: var(--coral);
 }
 
-.ring-btn {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.96);
-  color: #1a1a1a;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05);
-  transition:
-    transform 180ms var(--ease-out),
-    opacity 160ms linear,
-    background 120ms linear,
-    color 120ms linear;
-  will-change: transform;
+/* 喜欢态：心形填珊瑚红实心 */
+.viewer-bar__btn--like.is-liked .viewer-bar__icon {
+  color: var(--coral);
 }
 
-.ring-btn svg {
-  width: 21px;
-  height: 21px;
-  display: block;
-}
-
-.ring-btn.is-hot {
-  background: #1a1a1a;
-  color: #ffffff;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.34);
+.viewer-bar__btn--like.is-liked .viewer-bar__icon svg path {
+  fill: currentColor;
 }
 
 .viewer-toast {
   position: absolute;
   left: 50%;
-  bottom: 44px; /* env 的 Chrome61 基线 */
-  bottom: calc(44px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  bottom: 108px; /* env 的 Chrome61 基线；抬高避开底栏 */
+  bottom: calc(108px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   transform: translateX(-50%);
   z-index: 3;
   background: rgba(20, 20, 20, 0.85);
@@ -2576,7 +2741,7 @@ html.is-note body {
   .img-viewer.is-closing { opacity: 0; }
 
   #viewer-canvas,
-  .ring-btn {
+  .viewer-bar__icon {
     transition: none;
   }
 }
@@ -2608,7 +2773,9 @@ html.is-note body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 16px 12px;
+  /* 方案A整体下移：预留安全顶距避开小红书原生顶栏「转发/关注」（冲突区约44–56px）。
+     #app.is-library 已吃 safe-area，这里只加固定 52px，避免双重累加。 */
+  padding: 52px 16px 12px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -2753,4 +2920,136 @@ html.is-note body {
   line-height: 1.4;
   text-align: center;
   pointer-events: none;
+}
+
+/* ================= 导入状态卡：加载/失败非阻塞反馈（失败含「再试一次」） ================= */
+.import-status {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%);
+  z-index: 30;
+  max-width: 82%;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(20, 20, 20, 0.86);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.import-status.is-loading { color: rgba(255, 255, 255, 0.92); }
+.import-status.is-fail { background: rgba(80, 20, 20, 0.9); flex-direction: column; gap: 6px; }
+.import-status__retry {
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: transparent;
+  color: #fff;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 13px;
+}
+
+/* —— 灵感库 · 「管理类型」极简文字入口（库顶筛选条右侧，不挤占封面区） —— */
+.lib-stage { position: relative; }
+
+.lib-manage {
+  position: absolute;
+  top: 6px;
+  right: 16px;
+  z-index: 2;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: rgba(26, 26, 26, 0.55);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.lib-manage:active { transform: scale(0.95); }
+.lib-manage:focus-visible {
+  outline: 2px solid rgba(26, 26, 26, 0.55);
+  outline-offset: 2px;
+}
+
+/* —— 管理类型面板（复用 cat-sheet 弹层骨架） —— */
+.type-sheet__panel { max-height: 76vh; display: flex; flex-direction: column; }
+
+.type-sheet__hint {
+  margin: -6px 2px 12px;
+  font-size: 12px;
+  color: rgba(26, 26, 26, 0.45);
+}
+
+.type-sheet__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.type-sheet__list > * + * { margin-top: 10px; }
+.supports-flex-gap .type-sheet__list > * + * { margin-top: 0; }
+.supports-flex-gap .type-sheet__list { gap: 10px; }
+
+.type-sheet__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.type-sheet__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.type-sheet__body b {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.type-sheet__body small {
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(26, 26, 26, 0.45);
+}
+
+.type-sheet__del {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(226, 72, 61, 0.4);
+  background: #ffffff;
+  color: var(--coral);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 140ms var(--ease-out);
+}
+.type-sheet__del:active { transform: scale(0.94); }
+
+.type-sheet__empty {
+  margin: 20px 2px;
+  text-align: center;
+  font-size: 13px;
+  color: rgba(26, 26, 26, 0.4);
+}
+
+.type-sheet__done { flex: 1; }
+
+/* —— 确认弹层副文案（删除类型时说明封面保留） —— */
+.ask-sub {
+  margin: 8px 2px 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(26, 26, 26, 0.55);
 }

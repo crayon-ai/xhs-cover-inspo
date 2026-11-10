@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>封面灵感收集</title>
-  <link rel="stylesheet" href="./styles.css?v=20261106c" />
+  <link rel="stylesheet" href="./styles.css?v=20261110a" />
+  <link rel="stylesheet" href="./follow/follow.css?v=20261110a" />
 </head>
 <body>
   <nav class="tabs" id="tabs" aria-label="主导航" hidden>
@@ -45,6 +46,8 @@
             </span>
           </label>
           <input id="file-input" type="file" accept="image/*" multiple hidden />
+          <!-- 导入状态卡：加载/失败非阻塞反馈（失败含「再试一次」） -->
+          <div id="import-status" class="import-status" hidden></div>
           <button type="button" id="btn-follow-author" class="follow-pill" hidden aria-label="关注作者">关注</button>
           <div id="pick-stage" class="pick-stage is-hidden">
             <div class="pick-rail-wrap">
@@ -81,23 +84,11 @@
             <button type="button" id="btn-type-back" class="note-type-current"></button>
             <label class="note-field">
               <span>封面主文案</span>
-              <textarea id="field-headline" rows="2" placeholder="裸辞3个月，我后悔了吗"></textarea>
+              <textarea id="field-headline" rows="2"></textarea>
             </label>
             <label class="note-field">
               <span>为什么想点</span>
-              <textarea id="field-why" rows="2" placeholder="数字太夸张了、感觉在说我"></textarea>
-            </label>
-            <label class="note-field">
-              <span id="field-a-label">核心结果</span>
-              <textarea id="field-a" rows="2"></textarea>
-            </label>
-            <label class="note-field">
-              <span id="field-b-label">证据形式</span>
-              <textarea id="field-b" rows="2"></textarea>
-            </label>
-            <label class="note-field">
-              <span>补充想法</span>
-              <textarea id="field-extra" rows="2" placeholder="配色、排版、元素、发布场景"></textarea>
+              <textarea id="field-why" rows="2"></textarea>
             </label>
             <div class="note-actions">
               <button type="button" id="btn-note-skip" class="note-skip">跳过这张</button>
@@ -115,6 +106,7 @@
           <nav class="lib-chip-bar" id="lib-chip-bar" aria-label="分类筛选">
             <button type="button" id="btn-lib-cat-add" class="lib-chip-add" aria-label="新建分类">＋</button>
           </nav>
+          <button type="button" id="btn-lib-manage" class="lib-manage">管理</button>
           <div class="lib-scroll" id="lib-scroll">
             <div id="library-rows" class="lib-rows" aria-label="按分类浏览"></div>
             <p id="library-empty" class="lib-empty" hidden>空</p>
@@ -129,13 +121,37 @@
 
   </div>
 
-  <!-- 全屏封面查看 · 长按呼出操作环（层级在 lib-sheet 之下） -->
+  <!-- 全屏封面查看 · 顶栏返回 + 底部固定四钮横排（层级在 lib-sheet 之下） -->
   <div id="img-viewer" class="img-viewer" hidden>
+    <header class="viewer-topbar">
+      <button type="button" id="viewer-back" class="viewer-topbar__back" aria-label="返回">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12.5 4 6.5 10l6 6"/></svg>
+      </button>
+      <span class="viewer-topbar__title">封面预览</span>
+      <button type="button" id="viewer-follow" class="viewer-follow" data-testid="fm-entry-viewer" aria-label="照着做">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M20 2v4M22 4h-4"/><circle cx="4" cy="20" r="2" fill="currentColor"/></svg>
+        <span>照着做</span>
+      </button>
+    </header>
     <canvas id="viewer-canvas" aria-label="封面预览"></canvas>
-    <span id="viewer-like" class="img-viewer__like" hidden aria-hidden="true">
-      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 20.7c-.42 0-.84-.15-1.17-.44C6.5 16.6 2.6 13.1 2.6 9.1 2.6 6.2 4.8 4.1 7.4 4.1c1.86 0 3.55 1.03 4.6 2.72 1.05-1.69 2.74-2.72 4.6-2.72 2.6 0 4.8 2.1 4.8 5 0 4-3.9 7.5-8.43 11.16-.33.29-.75.44-1.17.44z"/></svg>
-    </span>
-    <div id="action-ring" class="action-ring" hidden aria-hidden="true"></div>
+    <nav id="viewer-bar" class="viewer-bar" aria-label="封面操作">
+      <button type="button" id="viewer-like" class="viewer-bar__btn viewer-bar__btn--like" data-action="like">
+        <span class="viewer-bar__icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M10 16.6S3.6 12.4 1.9 8.4C.9 6 2.4 3.4 5 3.4c1.9 0 3.4 1.1 5 3 1.6-1.9 3.1-3 5-3 2.6 0 4.1 2.6 3.1 5-1.7 4-8.1 8.2-8.1 8.2z"/></svg></span>
+        <span class="viewer-bar__label">喜欢</span>
+      </button>
+      <button type="button" class="viewer-bar__btn" data-action="export">
+        <span class="viewer-bar__icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M10 3.6v8.7M6.4 8.7 10 12.3l3.6-3.6M4.6 13v2.6a1 1 0 0 0 1 1h8.8a1 1 0 0 0 1-1V13"/></svg></span>
+        <span class="viewer-bar__label">导出</span>
+      </button>
+      <button type="button" class="viewer-bar__btn" data-action="desc">
+        <span class="viewer-bar__icon"><svg viewBox="0 0 20 20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M10 1.9a8.1 8.1 0 1 0 0 16.2 8.1 8.1 0 0 0 0-16.2zM10 9.2v4.2M10 6.1v.2"/></svg></span>
+        <span class="viewer-bar__label">查详情</span>
+      </button>
+      <button type="button" class="viewer-bar__btn viewer-bar__btn--danger" data-action="delete">
+        <span class="viewer-bar__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7m3 0l-.7 11.2A1.8 1.8 0 0 1 14.5 20h-5a1.8 1.8 0 0 1-1.8-1.8L7 7m3 4v5m4-5v5"/></svg></span>
+        <span class="viewer-bar__label">删除</span>
+      </button>
+    </nav>
     <div id="viewer-toast" class="viewer-toast" hidden aria-live="polite"></div>
   </div>
 
@@ -147,6 +163,10 @@
       <div class="lib-sheet__cover" id="lib-sheet-cover"></div>
       <div class="lib-sheet__fields" id="lib-sheet-fields"></div>
       <button type="button" id="sheet-save" class="sheet-save" hidden>确认修改</button>
+      <button type="button" id="sheet-follow" class="sheet-follow" data-testid="fm-entry-sheet">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M20 2v4M22 4h-4"/><circle cx="4" cy="20" r="2" fill="currentColor"/></svg>
+        照着做
+      </button>
       <button type="button" id="lib-sheet-delete" class="lib-sheet__delete">删除</button>
     </div>
     <div id="sheet-confirm" class="sheet-confirm" hidden>
@@ -173,10 +193,22 @@
     </div>
   </div>
   <div id="app-toast" class="app-toast" hidden aria-live="polite"></div>
+  <div id="type-sheet" class="cat-sheet" hidden>
+    <button type="button" id="type-sheet-backdrop" class="cat-sheet__backdrop" aria-label="关闭"></button>
+    <div class="cat-sheet__panel type-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="type-sheet-title">
+      <h2 id="type-sheet-title" class="cat-sheet__title">管理类型</h2>
+      <p class="type-sheet__hint">默认与自建均可删除 · 只删类型不删封面</p>
+      <div id="type-sheet-list" class="type-sheet__list"></div>
+      <div class="cat-sheet__btns">
+        <button type="button" id="type-sheet-close" class="cat-sheet__ok type-sheet__done">完成</button>
+      </div>
+    </div>
+  </div>
   <div id="ask" class="sheet-confirm ask" hidden>
     <button type="button" id="ask-backdrop" class="sheet-confirm__backdrop" aria-label="取消"></button>
     <div class="sheet-confirm__box" role="dialog" aria-modal="true">
       <p id="ask-text"></p>
+      <p id="ask-sub" class="ask-sub" hidden></p>
       <div class="sheet-confirm__actions">
         <button type="button" id="ask-cancel" class="sheet-confirm__cancel">取消</button>
         <button type="button" id="ask-ok" class="sheet-confirm__ok">确认</button>
@@ -194,6 +226,9 @@
     </svg>
     已收入灵感库
   </div>
-  <script src="./app.js?v=20261106c"></script>
+  <script src="./follow/components.js?v=20261110a"></script>
+  <script src="./follow/presets.js?v=20261110a"></script>
+  <script src="./follow/follow.js?v=20261110a"></script>
+  <script src="./app.js?v=20261110a"></script>
 </body>
 </html>
