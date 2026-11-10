@@ -2427,67 +2427,6 @@
     return libraryItemById(state.viewerId);
   }
 
-  // ——— 照着做入口 ———
-  // 把当前封面的 blob 转参考层图 + 自动取纸底色，交给 FollowMake 编辑器（内存编辑，不写库）。
-
-  /** 对封面四边/角采样：取出现最多且亮度足够的浅色作为画布纸底色 */
-  function sampleCoverBg(blob) {
-    var canvas = document.createElement('canvas');
-    return paintBlobToCanvas(blob, canvas).then(function () {
-      var ctx = canvas.getContext('2d');
-      var w = canvas.width, h = canvas.height;
-      if (!w || !h) return '#FCF8ED';
-      var m = 6;
-      var counts = {};
-      for (var i = 0; i < m; i++) {
-        var t = i / (m - 1);
-        // 四边各 6 点 + 四角
-        var pts = [
-          [Math.round(t * (w - 1)), 0], [Math.round(t * (w - 1)), h - 1],
-          [0, Math.round(t * (h - 1))], [w - 1, Math.round(t * (h - 1))]
-        ];
-        for (var j = 0; j < pts.length; j++) {
-          var d = ctx.getImageData(pts[j][0], pts[j][1], 1, 1).data;
-          if (d[3] < 128) continue;
-          var lum = 0.299 * d[0] + 0.587 * d[1] + 0.114 * d[2];
-          if (lum < 180) continue; // 只要浅色
-          var key = ((d[0] >> 4) << 8) | ((d[1] >> 4) << 4) | (d[2] >> 4);
-          var c = counts[key] || (counts[key] = { n: 0, r: 0, g: 0, b: 0 });
-          c.n++; c.r += d[0]; c.g += d[1]; c.b += d[2];
-        }
-      }
-      var best = null;
-      Object.keys(counts).forEach(function (k) {
-        if (!best || counts[k].n > counts[best].n) best = k;
-      });
-      if (!best) return '#FCF8ED';
-      var c = counts[best];
-      function hx(v) {
-        var s = Math.round(c[v] / c.n).toString(16);
-        return s.length < 2 ? '0' + s : s;
-      }
-      return '#' + hx('r') + hx('g') + hx('b');
-    }).catch(function () {
-      return '#FCF8ED';
-    });
-  }
-
-  /** 打开「照着做」编辑器：参考层 = 封面 objectURL，不丢查看器/弹层状态 */
-  function startFollowMake(item) {
-    if (!item || !item.imageBlob || !window.FollowMake) return;
-    var URL_ = window.URL || window.webkitURL;
-    var refUrl = URL_.createObjectURL(item.imageBlob);
-    sampleCoverBg(item.imageBlob).then(function (bg) {
-      window.FollowMake.open({
-        refSrc: refUrl,
-        bgColor: bg,
-        headline: item.headline || '',
-        whyClick: item.whyClick || '',
-        title: item.headline || ''
-      });
-    });
-  }
-
   /** 圆润软心（2026-11-04 用户选定），随容器 currentColor 上色（库卡片角标用） */
   function svgIcon() {
     var ns = 'http://www.w3.org/2000/svg';
@@ -3435,8 +3374,6 @@
     el.viewerCanvas = $('viewer-canvas');
     el.viewerLike = $('viewer-like');
     el.viewerBack = $('viewer-back');
-    el.viewerFollow = $('viewer-follow');
-    el.sheetFollow = $('sheet-follow');
     el.viewerBar = $('viewer-bar');
     el.viewerToast = $('viewer-toast');
     el.btnLibManage = $('btn-lib-manage');
@@ -3640,19 +3577,6 @@
       el.viewerBack.addEventListener('click', function (ev) {
         ev.stopPropagation();
         closeViewer();
-      });
-    }
-
-    // 照着做入口：全屏预览顶栏胶囊 / 查详情弹层主按钮
-    if (el.viewerFollow) {
-      el.viewerFollow.addEventListener('click', function (ev) {
-        ev.stopPropagation();
-        startFollowMake(viewerItem());
-      });
-    }
-    if (el.sheetFollow) {
-      el.sheetFollow.addEventListener('click', function () {
-        startFollowMake(libraryItemById(state.sheetId));
       });
     }
 
