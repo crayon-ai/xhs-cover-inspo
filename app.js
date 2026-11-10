@@ -32,6 +32,11 @@
   // seams, white-background text covers) is pure white (>=253). Only the
   // first kind should split covers; see findCoverBlocksInColumn.
 
+  // 导出提示词正文（与仓库根目录 prompt-agent.md 逐字一致；运行时不读该文件）
+  // --- BEGIN AGENT_PROMPT ---
+  var AGENT_PROMPT = "# 对标封面复刻\n\n本提示词给你（Codex 这类 agent）使用，不是直接给生图模型。\n\n目标：严格按对标封面的布局、配色、字体、标签和装饰来做，只换文字和素材。同时产出一张可以对外展示的「风格说明卡」和一份评分表。\n\n## 第 0 步：先向用户收集信息\n\n图 1 就是随本提示词一起给出的对标封面。请把它当作要严格复刻的模板，不要只当成「风格参考」，也不要用代码去拼版式。\n\n在开始任何拆解或出图之前，请逐项向用户收集下列信息，问齐再开始：\n\n1. 笔记内容或标题、卖点：可以是文字，也可以是笔记文件或链接。这次封面要表达什么。\n2. 是否露脸：默认不露脸。对标里如果有人像位，保留它的位置和大小，内容换成 logo 或产品标识。除非用户明确要求露脸。\n3. 主体素材：产品截图、界面图、产品图、logo 等。请用户按位置提供。\n\n如果一次没给全，就继续追问，不要自行编造笔记文案或主体素材。问齐后再进入下一步。\n\n## 输入说明\n\n- 必填：对标封面图（即图 1），以及笔记内容。\n- 选填：主体素材（产品截图、界面图、产品图、logo 等）。\n- 默认做不露脸版本。\n\n## 素材原则（硬性）\n\n- 主体素材不能让 AI 生成。界面截图、产品图、logo 都算主体素材。用户没提供时，先出一份「素材清单」然后停下，等用户自己准备好再继续。\n- 小点缀可以 AI 生成。图标、贴纸、笔刷、星星、箭头、背景纹理这类，可以在生成时直接让生图模型画，或者单独生成。\n\n## 第 1 步：风格提取：做一张对外展示的风格说明卡\n\n从对标封面里提炼以下内容，整理成一张可以直接放进笔记的说明卡（图片或排版好的文字）：\n\n- 整体气质：一句话概括，例如「活泼教程感，贴纸大字，米色暖底」。\n- 布局骨架：每一块的位置和占比，例如「标题占上 1/3，标签一行，界面卡片占下 2/3，右上一个圆形头像」。\n- 配色：每种主要颜色的 HEX 色值，以及它用在哪里（底色、强调色、描边、标签色）。\n- 字体：字重、描边、倾斜、阴影。\n- 装饰元素：笔刷、徽章、图标、贴纸各是什么、放在哪里。\n\n## 第 2 步：结构拆解\n\n把对标拆成固定的「格子」，后面逐个往里填：\n\n- 标题：几行、每行几个字、哪些是黑色短词、哪些是彩色大词、强调词在哪个位置。\n- 标签：几个、每个什么颜色、带不带图标、每个标签各管一个卖点。\n- 素材位：几张卡片或截图、各自的位置、倾斜角度、叠放顺序。\n- 人像位或 logo 位。\n- 需要删掉或替换的元素：例如播放按钮、无关水印、对标作者的名字。逐条列出来。\n\n## 第 3 步：文案拆解与改写\n\n- 先拆对标文案的套路，例如「动作词 + 成果词」「每个标签一个卖点」。\n- 从笔记里提炼对应的文案，严格按对标每一行的字数和节奏来填。\n- 如果为了字数删改了用户原来的标题或卖点，必须列出删了哪些字，请用户确认。\n\n## 第 4 步：素材检查\n\n- 把用户给的素材按顺序对应到第 2 步的各个素材位，例如「图 2 → 后排卡片，图 3 → 左下，图 4 → 右下」。\n- 素材位有缺口时，输出素材清单，然后停下，等用户补齐。清单里每个素材位写清三件事：\n  - 放在哪个位置。\n  - 该放什么内容，要结合笔记来写。\n  - 截图或拍摄要求，例如「投递看板，要能看到状态列，横版，不要有弹窗」。\n- 标出哪些点缀元素会由 AI 生成。\n- 不要用模型编造界面截图或产品主体。\n\n## 第 5 步：视觉细节清单\n\n把要还原的细节一条条写成可以检查的条目，例如：\n\n- 标题白色内描边加深色外描边，整体略微倾斜。\n- 「HTML」用蓝色，「互动课件」用橙色。\n- 标签是描边胶囊形状，左侧带图标。\n- 三张卡片错落叠放，后排卡片倾斜约 -6°。\n\n这份清单同时就是第 7 步评委的评分依据。\n\n## 第 6 步：出图\n\n用你能调用的生图模型，比例 3:4。\n\n- 图 1 固定放对标封面，提示词开头写「严格复刻图 1 的布局、配色、字体、标签和装饰，只替换文字和截图」。\n- 图 2 及之后的图按顺序放主体素材，并在提示词里写明每张图对应哪个素材位。\n- 提示词里还要写清楚：每一格要换成的确切文字、第 5 步的细节清单、要删掉的元素（例如「不要播放按钮」「不要人脸」「不要额外文字」）。\n- 每一轮至少出 2 张候选图。\n- 把每张候选和所用提示词存到你的工作目录。\n\n## 第 7 步：独立评委打分（≥ 8 分才能交付）\n\n另外开一个独立的 agent 或子任务当评委。评委只能看到三样东西：对标封面、成品、评分表和第 5 步的细节清单。不能让它看到生成用的提示词。\n\n如果你不能开子 agent，就自己按评分表逐条严格自评，不能跳过打分。\n\n评分满分 10 分，分 4 项（点击率不算评分项）：\n\n- 布局还原度：35%\n- 视觉细节还原：25%（按细节清单逐条核对）\n- 文字正确：20%\n- 主体素材还原度：20%（截图内容和位置对不对，有没有乱码）\n\n一票否决项，不管总分多少都不能交付：\n\n- 标题或标签有错字。\n- 出现人脸（不露脸模式下）。\n- 出现多余的文字或水印。\n- 素材放错位置。\n\n评委必须列出具体的扣分点，例如「左下卡片标题错写成『投试看板』」。\n\n低于 8 分或者命中否决项时，只针对扣分点修改，用编辑式提示词：「只改 X，其余保持完全一致」。然后重新评分。\n\n最多跑 3 轮。3 轮之后还不达标，就把最高分的那张和它的扣分点一起交给用户，说明没达标。\n\n每一轮的成品、分数和扣分点都要存到你的工作目录。\n\n## 第 8 步：存档与交付\n\n把每一轮的成品、分数和扣分点都存档，存到你的工作目录。\n\n交付时三样东西一起给：\n\n- 最终封面。\n- 风格说明卡。\n- 评分表（每一项的分数和扣分点）。\n\n如果对文案或素材做了删改，交付时一并说明。\n\n## 经验要点\n\n- 对标图要作为模板直接放进图 1，不要只当成「风格参考」，也不要用代码去拼版式。这是出图稳定的关键。\n- 先拆好格子再往里填，标题字数要和对标一致。\n- 细节要一条条点名写出来，不能只说「风格类似」。\n- AI 重画截图时，小字容易乱码，所以要多出几张候选，再挑最干净的。\n";
+  // --- END AGENT_PROMPT ---
+
   var state = {
     view: 'import',
     pendingFiles: [],
@@ -2400,9 +2405,9 @@
     if (dy > 72) closeLibrarySheet();
   }
 
-  // ——— Fullscreen viewer + 底部固定四钮横排 ———
+  // ——— Fullscreen viewer + 底部固定五钮横排 ———
   // 点击库卡片进入全屏查看（纯图无文字）；顶栏返回/点空白关闭，
-  // 横滑切换；底部固定「喜欢/导出/查详情/删除」四钮 click 直接触发。
+  // 横滑切换；底部固定「喜欢/导出/提示词/查详情/删除」五钮 click 直接触发。
 
   var viewerPress = null;  // {x,y,t,moved,id,onBar}
   var toastTimer = 0;
@@ -2540,7 +2545,7 @@
     syncViewerLike(item);
   }
 
-  // —— 底栏四钮 ——
+  // —— 底栏五钮 ——
 
   /** 触感反馈：容器 vibrateShort(9.50+) 优先，网页/低版本回退 navigator.vibrate */
   function hapticTick() {
@@ -2562,6 +2567,7 @@
     else if (action === 'export') ringExport();
     else if (action === 'desc') ringDesc();
     else if (action === 'delete') ringDelete();
+    else if (action === 'prompt') openPromptSheet();
   }
 
   // —— 四个动作 ——
@@ -2756,6 +2762,537 @@
       }
     } catch (e) {
       showViewerToast('导出失败');
+    }
+  }
+
+
+  // ——— 导出提示词：对标封面原图 + 单张提示词长图 ———
+  var PROMPT_PAGE_W = 1170;
+  var PROMPT_MARGIN_X = 84;
+  var PROMPT_MARGIN_TOP = 88;
+  var PROMPT_MARGIN_BOTTOM = 88;
+  var PROMPT_TITLE_SIZE = 40;
+  var PROMPT_BODY_SIZE = 34;
+  var PROMPT_BODY_LH = Math.round(PROMPT_BODY_SIZE * 1.65);
+  var PROMPT_FONT_STACK = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", sans-serif';
+  var PROMPT_LINE_PUNCT = '，。、；：！？,.!?;:）)】》」』';
+
+  var promptExport = {
+    open: false,
+    saving: false,
+    coverBlob: null,
+    coverUrl: '',
+    coverName: '',
+    promptBlob: null,
+    promptUrl: '',
+    promptName: '',
+    promptSize: null
+  };
+
+  function promptStampName(prefix, ext) {
+    var d = new Date();
+    function p(n) { return n < 10 ? '0' + n : '' + n; }
+    return prefix + '-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
+      '-' + p(d.getHours()) + p(d.getMinutes()) + '.' + ext;
+  }
+
+  function extFromBlob(blob) {
+    var t = (blob && blob.type) || '';
+    if (t.indexOf('png') >= 0) return 'png';
+    if (t.indexOf('webp') >= 0) return 'webp';
+    if (t.indexOf('jpeg') >= 0 || t.indexOf('jpg') >= 0) return 'jpg';
+    return 'jpg';
+  }
+
+  function revokePromptUrls() {
+    if (promptExport.coverUrl) {
+      try { URL.revokeObjectURL(promptExport.coverUrl); } catch (e) {}
+    }
+    if (promptExport.promptUrl) {
+      try { URL.revokeObjectURL(promptExport.promptUrl); } catch (e2) {}
+    }
+    promptExport.coverUrl = '';
+    promptExport.promptUrl = '';
+  }
+
+  function promptToHex(r, g, b) {
+    return (
+      '#' +
+      [r, g, b]
+        .map(function (n) {
+          var s = Math.max(0, Math.min(255, Math.round(n))).toString(16);
+          return s.length === 1 ? '0' + s : s;
+        })
+        .join('')
+        .toUpperCase()
+    );
+  }
+
+  function promptColorDist(a, b) {
+    var dr = a[0] - b[0], dg = a[1] - b[1], db = a[2] - b[2];
+    return Math.sqrt(dr * dr + dg * dg + db * db);
+  }
+
+  function promptChroma(rgb) {
+    return Math.max(rgb[0], rgb[1], rgb[2]) - Math.min(rgb[0], rgb[1], rgb[2]);
+  }
+
+  function promptLum(rgb) {
+    return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  }
+
+  function promptHue(rgb) {
+    var r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+    var mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    if (d < 1e-6) return 0;
+    var h;
+    if (mx === r) h = (g - b) / d;
+    else if (mx === g) h = 2 + (b - r) / d;
+    else h = 4 + (r - g) / d;
+    return ((h * 60) + 360) % 360;
+  }
+
+  function promptHueDist(a, b) {
+    var d = Math.abs(a - b);
+    return Math.min(d, 360 - d);
+  }
+
+  function promptBoxRange(pixels) {
+    var min = [255, 255, 255], max = [0, 0, 0];
+    for (var i = 0; i < pixels.length; i++) {
+      var p = pixels[i];
+      for (var c = 0; c < 3; c++) {
+        if (p[c] < min[c]) min[c] = p[c];
+        if (p[c] > max[c]) max[c] = p[c];
+      }
+    }
+    var ranges = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+    var ch = 0;
+    if (ranges[1] > ranges[ch]) ch = 1;
+    if (ranges[2] > ranges[ch]) ch = 2;
+    return { min: min, max: max, ranges: ranges, channel: ch, range: ranges[ch] };
+  }
+
+  /** Median-cut 取色，仅装饰界面；getImageData 失败（污染画布等）时返回空数组。 */
+  function extractPaletteFromCanvas(srcCanvas, want) {
+    want = want || 6;
+    try {
+      var sw = srcCanvas.width;
+      var sh = srcCanvas.height;
+      if (!sw || !sh) return [];
+      var w = 280;
+      var h = Math.max(1, Math.round((280 * sh) / sw));
+      var cv = document.createElement('canvas');
+      cv.width = w;
+      cv.height = h;
+      var ctx = cv.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(srcCanvas, 0, 0, w, h);
+      var data = ctx.getImageData(0, 0, w, h).data;
+      var pixels = [];
+      for (var i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 250) continue;
+        pixels.push([data[i], data[i + 1], data[i + 2]]);
+      }
+      if (!pixels.length) return [];
+
+      var boxes = [{ pixels: pixels }];
+      var targetBoxes = 32;
+      while (boxes.length < targetBoxes) {
+        var bi = -1, best = -1;
+        for (var b = 0; b < boxes.length; b++) {
+          if (boxes[b].pixels.length < 2) continue;
+          var info = promptBoxRange(boxes[b].pixels);
+          if (info.range > best) {
+            best = info.range;
+            bi = b;
+          }
+        }
+        if (bi < 0 || best < 1) break;
+        var box = boxes[bi];
+        var ch = promptBoxRange(box.pixels).channel;
+        var sorted = box.pixels.slice().sort(function (a, c) { return a[ch] - c[ch]; });
+        var mid = Math.floor(sorted.length / 2);
+        if (mid < 1 || mid >= sorted.length) break;
+        boxes.splice(bi, 1,
+          { pixels: sorted.slice(0, mid) },
+          { pixels: sorted.slice(mid) }
+        );
+      }
+
+      var raw = boxes.map(function (box2) {
+        var n = box2.pixels.length;
+        var s = [0, 0, 0];
+        for (var j = 0; j < n; j++) {
+          s[0] += box2.pixels[j][0];
+          s[1] += box2.pixels[j][1];
+          s[2] += box2.pixels[j][2];
+        }
+        var rgb = [s[0] / n, s[1] / n, s[2] / n];
+        return {
+          rgb: rgb,
+          count: n,
+          hex: promptToHex(rgb[0], rgb[1], rgb[2]),
+          chroma: promptChroma(rgb),
+          lum: promptLum(rgb),
+          hue: promptHue(rgb)
+        };
+      }).sort(function (a, c) { return c.count - a.count; });
+
+      var clusters = [];
+      raw.forEach(function (c) {
+        var hit = null;
+        for (var k = 0; k < clusters.length; k++) {
+          if (promptColorDist(clusters[k].rgb, c.rgb) < 18) { hit = clusters[k]; break; }
+        }
+        if (!hit) { clusters.push(c); return; }
+        var nn = hit.count + c.count;
+        hit.rgb = [
+          (hit.rgb[0] * hit.count + c.rgb[0] * c.count) / nn,
+          (hit.rgb[1] * hit.count + c.rgb[1] * c.count) / nn,
+          (hit.rgb[2] * hit.count + c.rgb[2] * c.count) / nn
+        ];
+        hit.count = nn;
+        hit.hex = promptToHex(hit.rgb[0], hit.rgb[1], hit.rgb[2]);
+        hit.chroma = promptChroma(hit.rgb);
+        hit.lum = promptLum(hit.rgb);
+        hit.hue = promptHue(hit.rgb);
+      });
+      clusters.sort(function (a, c) { return c.count - a.count; });
+
+      var picked = [];
+      var lights = clusters.filter(function (c) { return c.lum > 180; });
+      var paper = lights.filter(function (c) {
+        return c.chroma >= 8 && c.chroma <= 48 && c.count >= (lights[0] ? lights[0].count * 0.2 : 0);
+      });
+      paper.sort(function (a, c) {
+        return (c.chroma * Math.log(c.count + 2)) - (a.chroma * Math.log(a.count + 2));
+      });
+      picked.push(paper[0] || lights[0] || clusters[0]);
+
+      var darks = clusters.filter(function (c) { return c.lum < 60; });
+      darks.sort(function (a, c) { return a.lum - c.lum; });
+      if (darks[0] && promptColorDist(darks[0].rgb, picked[0].rgb) > 40) picked.push(darks[0]);
+
+      while (picked.length < want) {
+        var bestC = null, bestS = -1;
+        for (var pi = 0; pi < clusters.length; pi++) {
+          var c = clusters[pi];
+          if (picked.some(function (p) { return p.hex === c.hex; })) continue;
+          var md = Infinity, hd = 180;
+          for (var pj = 0; pj < picked.length; pj++) {
+            md = Math.min(md, promptColorDist(c.rgb, picked[pj].rgb));
+            if (c.chroma > 20 && picked[pj].chroma > 20) {
+              hd = Math.min(hd, promptHueDist(c.hue, picked[pj].hue));
+            }
+          }
+          if (md < 28) continue;
+          var score = Math.pow(Math.max(c.chroma, 1) / 255, 1.15) * Math.log(c.count + 2) * (md / 40) * (0.55 + hd / 180);
+          if (hd < 18) score *= 0.08;
+          if (c.chroma < 40) score *= 0.1;
+          else if (c.chroma > 80) score *= 1.25;
+          if (score > bestS) { bestS = score; bestC = c; }
+        }
+        if (!bestC) break;
+        picked.push(bestC);
+      }
+      return picked.map(function (c) { return c.hex; });
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function renderPromptSwatches(colors) {
+    var host = el.promptSwatches;
+    if (!host) return;
+    host.innerHTML = '';
+    if (!colors || !colors.length) {
+      host.hidden = true;
+      return;
+    }
+    colors.forEach(function (hex) {
+      var s = document.createElement('span');
+      s.className = 'prompt-sheet__sw';
+      s.style.background = hex;
+      s.title = hex;
+      host.appendChild(s);
+    });
+    host.hidden = false;
+  }
+
+  function wrapPromptParagraph(ctx, para, maxW) {
+    if (para === '') return [''];
+    var lines = [];
+    var cur = '';
+    for (var i = 0; i < para.length; i++) {
+      var ch = para[i];
+      var overflow = ctx.measureText(cur + ch).width > maxW && cur;
+      if (overflow && PROMPT_LINE_PUNCT.indexOf(ch) >= 0) {
+        cur += ch;
+        continue;
+      }
+      if (overflow) {
+        lines.push(cur);
+        cur = ch;
+      } else {
+        cur += ch;
+      }
+    }
+    if (cur !== '') lines.push(cur);
+    return lines.length ? lines : [''];
+  }
+
+  function isPromptHeading(line) {
+    return /^#{1,3}\s/.test(line);
+  }
+
+  function layoutPromptPage(text) {
+    var measure = document.createElement('canvas').getContext('2d');
+    var maxW = PROMPT_PAGE_W - PROMPT_MARGIN_X * 2;
+    var paragraphs = text.split('\n');
+    var items = [];
+    paragraphs.forEach(function (para, idx) {
+      var heading = isPromptHeading(para);
+      measure.font = (heading ? '650 ' + PROMPT_TITLE_SIZE : '400 ' + PROMPT_BODY_SIZE) + 'px ' + PROMPT_FONT_STACK;
+      var wrapped = wrapPromptParagraph(measure, para, maxW);
+      wrapped.forEach(function (ln, j) {
+        items.push({
+          text: ln,
+          heading: heading,
+          breakBefore: idx > 0 && j === 0 && para !== '' && isPromptHeading(para)
+        });
+      });
+    });
+
+    var headerH = 72;
+    var totalBody = 0;
+    items.forEach(function (it, i) {
+      if (it.breakBefore && i > 0) totalBody += Math.round(PROMPT_BODY_LH * 0.35);
+      totalBody += it.heading ? PROMPT_TITLE_SIZE + 18 : PROMPT_BODY_LH;
+    });
+    var height = Math.max(PROMPT_MARGIN_TOP + headerH + totalBody + PROMPT_MARGIN_BOTTOM, 1600);
+
+    var cv = document.createElement('canvas');
+    cv.width = PROMPT_PAGE_W;
+    cv.height = height;
+    var ctx = cv.getContext('2d');
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, PROMPT_PAGE_W, height);
+    ctx.fillStyle = '#1a1a1a';
+    ctx.font = '650 ' + PROMPT_TITLE_SIZE + 'px ' + PROMPT_FONT_STACK;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('对标封面复刻 · Agent 提示词', PROMPT_MARGIN_X, PROMPT_MARGIN_TOP);
+    ctx.strokeStyle = 'rgba(26,26,26,0.14)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(PROMPT_MARGIN_X, PROMPT_MARGIN_TOP + 24);
+    ctx.lineTo(PROMPT_PAGE_W - PROMPT_MARGIN_X, PROMPT_MARGIN_TOP + 24);
+    ctx.stroke();
+
+    var y = PROMPT_MARGIN_TOP + headerH;
+    items.forEach(function (it, i) {
+      if (it.breakBefore && i > 0) y += Math.round(PROMPT_BODY_LH * 0.35);
+      ctx.fillStyle = '#1a1a1a';
+      ctx.textBaseline = 'alphabetic';
+      if (it.heading) {
+        ctx.font = '650 ' + PROMPT_TITLE_SIZE + 'px ' + PROMPT_FONT_STACK;
+        if (it.text) ctx.fillText(it.text, PROMPT_MARGIN_X, y);
+        y += PROMPT_TITLE_SIZE + 18;
+      } else {
+        ctx.font = '400 ' + PROMPT_BODY_SIZE + 'px ' + PROMPT_FONT_STACK;
+        if (it.text) ctx.fillText(it.text, PROMPT_MARGIN_X, y);
+        y += PROMPT_BODY_LH;
+      }
+    });
+    return cv;
+  }
+
+  function renderPromptCanvas() {
+    var ready = (document.fonts && document.fonts.ready)
+      ? document.fonts.ready.catch(function () {})
+      : Promise.resolve();
+    return ready.then(function () {
+      return layoutPromptPage(AGENT_PROMPT);
+    });
+  }
+
+  function triggerDownload(url, filename) {
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  function blobToDataURL(blob) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onload = function () { resolve(r.result); };
+      r.onerror = function () { reject(new Error('read failed')); };
+      r.readAsDataURL(blob);
+    });
+  }
+
+  /** 容器：writeTempFile + saveImageToPhotosAlbum；网页：a[download]。 */
+  async function persistImageBlob(blob, filename) {
+    var mt = xhsMiniTool();
+    if (mt) {
+      var dataUrl = await blobToDataURL(blob);
+      var res = await mt.writeTempFile({ data: dataUrl });
+      await mt.saveImageToPhotosAlbum({ filePath: res.filePath });
+      return 'album';
+    }
+    var url = URL.createObjectURL(blob);
+    triggerDownload(url, filename);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    return 'download';
+  }
+
+  function hidePromptSwatches() {
+    if (!el.promptSwatches) return;
+    el.promptSwatches.innerHTML = '';
+    el.promptSwatches.hidden = true;
+  }
+
+  function resetPromptSheetMain() {
+    if (el.promptTitle) el.promptTitle.textContent = '导出';
+    if (el.promptMain) el.promptMain.hidden = false;
+    if (el.promptDone) el.promptDone.hidden = true;
+    if (el.promptList) el.promptList.innerHTML = '';
+    if (el.promptSave) {
+      el.promptSave.disabled = true;
+      el.promptSave.textContent = '保存';
+    }
+  }
+
+  function openPromptSheet() {
+    var item = viewerItem();
+    if (!item || !item.imageBlob || !el.promptSheet) return;
+    revokePromptUrls();
+    promptExport.open = true;
+    promptExport.saving = false;
+    promptExport.coverBlob = item.imageBlob;
+    promptExport.coverName = promptStampName('对标封面', extFromBlob(item.imageBlob));
+    promptExport.promptName = promptStampName('提示词', 'png');
+    promptExport.promptBlob = null;
+    promptExport.promptSize = null;
+    promptExport.coverUrl = URL.createObjectURL(item.imageBlob);
+
+    resetPromptSheetMain();
+    hidePromptSwatches();
+    if (el.promptCover) {
+      el.promptCover.innerHTML = '';
+      var img = document.createElement('img');
+      img.alt = '';
+      img.src = promptExport.coverUrl;
+      el.promptCover.appendChild(img);
+    }
+    el.promptSheet.hidden = false;
+
+    var token = item.id;
+    var colorCanvas = document.createElement('canvas');
+    paintBlobToCanvas(item.imageBlob, colorCanvas).then(function () {
+      if (!promptExport.open || !viewerItem() || viewerItem().id !== token) return;
+      renderPromptSwatches(extractPaletteFromCanvas(colorCanvas, 6));
+    }).catch(function () {
+      hidePromptSwatches();
+    });
+
+    renderPromptCanvas().then(function (cv) {
+      return canvasToBlob(cv, 'image/png').then(function (blob) {
+        return { cv: cv, blob: blob };
+      });
+    }).then(function (res) {
+      if (!promptExport.open) return;
+      if (!res || !res.blob) {
+        if (el.promptSave) el.promptSave.textContent = '生成失败';
+        return;
+      }
+      promptExport.promptBlob = res.blob;
+      promptExport.promptUrl = URL.createObjectURL(res.blob);
+      promptExport.promptSize = { w: res.cv.width, h: res.cv.height };
+      if (el.promptSave) el.promptSave.disabled = false;
+    }).catch(function () {
+      if (el.promptSave) el.promptSave.textContent = '生成失败';
+    });
+  }
+
+  function closePromptSheet() {
+    promptExport.open = false;
+    promptExport.saving = false;
+    promptExport.coverBlob = null;
+    promptExport.promptBlob = null;
+    promptExport.promptSize = null;
+    revokePromptUrls();
+    if (el.promptCover) el.promptCover.innerHTML = '';
+    if (el.promptList) el.promptList.innerHTML = '';
+    hidePromptSwatches();
+    if (el.promptSheet) el.promptSheet.hidden = true;
+  }
+
+  function addPromptSavedItem(src, title, sizeText) {
+    if (!el.promptList) return;
+    var li = document.createElement('li');
+    li.className = 'prompt-sheet__item';
+    var img = document.createElement('img');
+    img.src = src;
+    img.alt = title;
+    var meta = document.createElement('div');
+    meta.className = 'prompt-sheet__item-meta';
+    var k = document.createElement('div');
+    k.className = 'prompt-sheet__item-k';
+    k.textContent = title;
+    var s = document.createElement('div');
+    s.className = 'prompt-sheet__item-s';
+    s.textContent = sizeText || '';
+    meta.appendChild(k);
+    meta.appendChild(s);
+    li.appendChild(img);
+    li.appendChild(meta);
+    el.promptList.appendChild(li);
+  }
+
+  function showPromptSaved() {
+    if (el.promptList) el.promptList.innerHTML = '';
+    addPromptSavedItem(promptExport.coverUrl, '对标封面', '原图已保存');
+    var sz = promptExport.promptSize;
+    addPromptSavedItem(
+      promptExport.promptUrl,
+      '提示词',
+      sz ? (sz.w + ' × ' + sz.h) : ''
+    );
+    if (el.promptMain) el.promptMain.hidden = true;
+    if (el.promptDone) el.promptDone.hidden = false;
+    if (el.promptTitle) el.promptTitle.textContent = '已保存';
+  }
+
+  async function onPromptSave() {
+    if (promptExport.saving || !promptExport.coverBlob || !promptExport.promptBlob) return;
+    promptExport.saving = true;
+    if (el.promptSave) {
+      el.promptSave.disabled = true;
+      el.promptSave.textContent = '保存中';
+    }
+    try {
+      var mt = xhsMiniTool();
+      if (mt) {
+        await persistImageBlob(promptExport.coverBlob, promptExport.coverName);
+        await persistImageBlob(promptExport.promptBlob, promptExport.promptName);
+      } else {
+        // 网页版：预生成的 object URL 同步触发第一张，短间隔再触发第二张，降低连续下载被拦的概率。
+        triggerDownload(promptExport.coverUrl, promptExport.coverName);
+        await new Promise(function (resolve) { setTimeout(resolve, 400); });
+        if (!promptExport.open) return;
+        triggerDownload(promptExport.promptUrl, promptExport.promptName);
+      }
+      showPromptSaved();
+    } catch (e) {
+      promptExport.saving = false;
+      if (el.promptSave) {
+        el.promptSave.disabled = false;
+        el.promptSave.textContent = '保存';
+      }
+      if (el.promptTitle) el.promptTitle.textContent = '保存失败';
     }
   }
 
@@ -3376,6 +3913,17 @@
     el.viewerBack = $('viewer-back');
     el.viewerBar = $('viewer-bar');
     el.viewerToast = $('viewer-toast');
+    el.promptSheet = $('prompt-sheet');
+    el.promptBackdrop = $('prompt-sheet-backdrop');
+    el.promptClose = $('prompt-sheet-close');
+    el.promptCover = $('prompt-sheet-cover');
+    el.promptTitle = $('prompt-sheet-title');
+    el.promptSwatches = $('prompt-sheet-swatches');
+    el.promptMain = $('prompt-sheet-main');
+    el.promptSave = $('prompt-sheet-save');
+    el.promptDone = $('prompt-sheet-done');
+    el.promptList = $('prompt-sheet-list');
+    el.promptDoneBtn = $('prompt-sheet-done-btn');
     el.btnLibManage = $('btn-lib-manage');
     el.typeSheet = $('type-sheet');
     el.typeSheetList = $('type-sheet-list');
@@ -3564,7 +4112,7 @@
       });
     }
 
-    // 底栏四钮 + 顶栏返回：click 触发，无长按
+    // 底栏五钮 + 顶栏返回：click 触发，无长按
     if (el.viewerBar) {
       el.viewerBar.addEventListener('click', function (ev) {
         var btn = ev.target && ev.target.closest ? ev.target.closest('.viewer-bar__btn') : null;
@@ -3579,9 +4127,37 @@
         closeViewer();
       });
     }
+    if (el.promptClose) {
+      el.promptClose.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        closePromptSheet();
+      });
+    }
+    if (el.promptBackdrop) {
+      el.promptBackdrop.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        closePromptSheet();
+      });
+    }
+    if (el.promptSave) {
+      el.promptSave.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        onPromptSave();
+      });
+    }
+    if (el.promptDoneBtn) {
+      el.promptDoneBtn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        closePromptSheet();
+      });
+    }
 
     document.addEventListener('keydown', function (ev) {
       if (ev.key !== 'Escape') return;
+      if (el.promptSheet && !el.promptSheet.hidden) {
+        closePromptSheet();
+        return;
+      }
       if (!el.libSheet || el.libSheet.hidden) {
         if (el.catSheet && !el.catSheet.hidden) {
           closeCatSheet();
