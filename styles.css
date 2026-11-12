@@ -3085,7 +3085,7 @@ html.is-note body {
 .prompt-sheet {
   position: fixed;
   top: 0; right: 0; bottom: 0; left: 0;
-  z-index: 50;
+  z-index: 100; /* 高于 pp-toast(95)，避免「已收入灵感库」叠在弹层上；低于 ask(200) */
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -3106,7 +3106,7 @@ html.is-note body {
   z-index: 1;
   width: 100%;
   max-width: 480px;
-  max-height: min(78dvh, 640px);
+  max-height: min(82dvh, 680px);
   overflow: auto;
   background: #ffffff;
   color: #1a1a1a;
@@ -3155,8 +3155,15 @@ html.is-note body {
   font-weight: 650;
 }
 
+.prompt-sheet__thumbs {
+  display: flex;
+  gap: 12px;
+  flex: none;
+}
+
 .prompt-sheet__cover {
   width: 44px;
+  height: 58px;
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(39, 54, 47, 0.04), 0 8px 24px rgba(39, 54, 47, 0.06);
@@ -3168,7 +3175,21 @@ html.is-note body {
 .prompt-sheet__cover canvas {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+/* 保存后：隐藏顶部双缩略图，标题左对齐单独一行 */
+.prompt-sheet__panel--done .prompt-sheet__thumbs {
+  display: none;
+}
+
+.prompt-sheet__hint {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(26, 26, 26, 0.45);
 }
 
 .prompt-sheet__swatches {
@@ -3231,10 +3252,14 @@ html.is-note body {
   box-shadow: 0 4px 16px rgba(39, 54, 47, 0.10), 0 0 0 1px rgba(26, 26, 26, 0.06);
 }
 
+.prompt-sheet__item {
+  flex: 1 1 auto;
+}
+
 .prompt-sheet__item img,
 .prompt-sheet__item canvas {
-  width: 44px;
-  height: 58px;
+  width: 56px;
+  height: 74px;
   object-fit: cover;
   object-position: top;
   border-radius: 8px;

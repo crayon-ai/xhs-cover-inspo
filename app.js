@@ -2763,7 +2763,7 @@
 
 
   // ——— 导出提示词：对标封面原图 + 静态流程说明图（assets/prompt-flow-poster.png）———
-  var PROMPT_POSTER_URL = './assets/prompt-flow-poster.png?v=20261112a';
+  var PROMPT_POSTER_URL = './assets/prompt-flow-poster.png?v=20261112b';
 
   var promptExport = {
     open: false,
@@ -3077,10 +3077,12 @@
   }
 
   function resetPromptSheetMain() {
+    if (el.promptPanel) el.promptPanel.classList.remove('prompt-sheet__panel--done');
     if (el.promptTitle) el.promptTitle.textContent = '导出';
     if (el.promptMain) el.promptMain.hidden = false;
     if (el.promptDone) el.promptDone.hidden = true;
     if (el.promptList) el.promptList.innerHTML = '';
+    if (el.promptPoster) el.promptPoster.innerHTML = '';
     if (el.promptSave) {
       el.promptSave.disabled = true;
       el.promptSave.textContent = '保存';
@@ -3125,6 +3127,13 @@
       promptExport.promptBlob = poster.blob;
       promptExport.promptUrl = URL.createObjectURL(poster.blob);
       promptExport.promptSize = { w: poster.w, h: poster.h };
+      if (el.promptPoster) {
+        el.promptPoster.innerHTML = '';
+        var thumb = document.createElement('img');
+        thumb.alt = '提示词';
+        thumb.src = promptExport.promptUrl;
+        el.promptPoster.appendChild(thumb);
+      }
       if (el.promptSave) el.promptSave.disabled = false;
     }).catch(function () {
       if (!promptExport.open) return;
@@ -3142,7 +3151,9 @@
     promptExport.promptBlob = null;
     promptExport.promptSize = null;
     revokePromptUrls();
+    if (el.promptPanel) el.promptPanel.classList.remove('prompt-sheet__panel--done');
     if (el.promptCover) el.promptCover.innerHTML = '';
+    if (el.promptPoster) el.promptPoster.innerHTML = '';
     if (el.promptList) el.promptList.innerHTML = '';
     hidePromptSwatches();
     if (el.promptSheet) el.promptSheet.hidden = true;
@@ -3181,7 +3192,8 @@
     );
     if (el.promptMain) el.promptMain.hidden = true;
     if (el.promptDone) el.promptDone.hidden = false;
-    if (el.promptTitle) el.promptTitle.textContent = '已保存';
+    if (el.promptPanel) el.promptPanel.classList.add('prompt-sheet__panel--done');
+    if (el.promptTitle) el.promptTitle.textContent = '已保存到相册';
   }
 
   async function onPromptSave() {
@@ -3834,7 +3846,9 @@
     el.promptSheet = $('prompt-sheet');
     el.promptBackdrop = $('prompt-sheet-backdrop');
     el.promptClose = $('prompt-sheet-close');
+    el.promptPanel = $('prompt-sheet-panel');
     el.promptCover = $('prompt-sheet-cover');
+    el.promptPoster = $('prompt-sheet-poster');
     el.promptTitle = $('prompt-sheet-title');
     el.promptSwatches = $('prompt-sheet-swatches');
     el.promptMain = $('prompt-sheet-main');
