@@ -32,10 +32,6 @@
   // seams, white-background text covers) is pure white (>=253). Only the
   // first kind should split covers; see findCoverBlocksInColumn.
 
-  // 导出提示词正文（与仓库根目录 prompt-agent.md 逐字一致；运行时不读该文件）
-  // --- BEGIN AGENT_PROMPT ---
-  var AGENT_PROMPT = "# 对标封面复刻\n\n本提示词给你（Codex 这类 agent）使用，不是直接给生图模型。\n\n目标：严格按对标封面的布局、配色、字体、标签和装饰来做，只换文字和素材。同时产出一张可以对外展示的「风格说明卡」和一份评分表。\n\n## 第 0 步：先向用户收集信息\n\n图 1 就是随本提示词一起给出的对标封面。请把它当作要严格复刻的模板，不要只当成「风格参考」，也不要用代码去拼版式。\n\n在开始任何拆解或出图之前，请逐项向用户收集下列信息，问齐再开始：\n\n1. 笔记内容或标题、卖点：可以是文字，也可以是笔记文件或链接。这次封面要表达什么。\n2. 是否露脸：默认不露脸。对标里如果有人像位，保留它的位置和大小，内容换成 logo 或产品标识。除非用户明确要求露脸。\n3. 主体素材：产品截图、界面图、产品图、logo 等。有就请用户提供；没有或不知道该用什么，你会在第 4 步给出素材建议，并在第 6 步停下，等用户准备好真实截图或实拍图后再出图。\n\n如果笔记内容一次没给全，就继续追问，不要自行编造笔记文案或主体素材。笔记问齐后再进入下一步；素材可以先空着。\n\n## 输入说明\n\n- 必填：对标封面图（即图 1），以及笔记内容。\n- 选填：主体素材（产品截图、界面图、产品图、logo 等）。没给齐不能出图。\n- 默认做不露脸版本。\n\n## 素材原则（硬性）\n\n- 主体素材不能让 AI 生成。界面截图、产品图、logo 都算主体素材。用户没提供或提供不全时，在第 4 步给每个空缺位写出 2～3 个候选并标明推荐，然后在第 6 步方案确认时停下，等用户准备好真实截图或实拍图后再出图。不要用文字卡片、图标组合或 AI 插画替代主体素材。\n- 小点缀可以 AI 生成。图标、贴纸、笔刷、星星、箭头、背景纹理这类，可以在生成时直接让生图模型画，或者单独生成。\n\n## 第 1 步：风格提取：做一张对外展示的风格说明卡\n\n从对标封面里提炼以下内容，整理成一张可以直接放进笔记的说明卡（图片或排版好的文字）：\n\n- 整体气质：一句话概括，例如「活泼教程感，贴纸大字，米色暖底」。\n- 布局骨架：每一块的位置和占比，例如「标题占上 1/3，标签一行，界面卡片占下 2/3，右上一个圆形头像」。\n- 配色：每种主要颜色的 HEX 色值，以及它用在哪里（底色、强调色、描边、标签色）。\n- 字体：字重、描边、倾斜、阴影。\n- 装饰元素：笔刷、徽章、图标、贴纸各是什么、放在哪里。\n\n## 第 2 步：结构拆解\n\n把对标拆成固定的「格子」，后面逐个往里填：\n\n- 标题：几行、每行几个字、哪些是黑色短词、哪些是彩色大词、强调词在哪个位置。\n- 标签：几个、每个什么颜色、带不带图标、每个标签各管一个卖点。\n- 素材位：几张卡片或截图、各自的位置、倾斜角度、叠放顺序。\n- 人像位或 logo 位。\n- 需要删掉或替换的元素：例如播放按钮、无关水印、对标作者的名字。逐条列出来。\n\n## 第 3 步：文案拆解与改写\n\n- 先拆对标文案的套路，例如「动作词 + 成果词」「每个标签一个卖点」。\n- 从笔记里提炼对应的文案，严格按对标每一行的字数和节奏来填。\n- 如果为了字数删改了用户原来的标题或卖点，必须列出删了哪些字，放进第 6 步的方案里请用户确认。\n\n## 第 4 步：素材检查与素材建议\n\n- 把用户给的素材按顺序对应到第 2 步的各个素材位，例如「图 2 → 后排卡片，图 3 → 左下，图 4 → 右下」。\n- 用户没给素材、或素材不够时，不要只列需求，要主动帮用户出主意。结合对标封面和笔记内容，给每个空缺的素材位写清：\n  - 放在哪个位置。\n  - 2～3 个候选内容，并标出推荐哪一个、为什么。例如「后排大卡片：① 日程页截图 ② 打卡记录页 ③ 复盘笔记页；推荐 ①，最能说明『一页日程』这个卖点」。\n  - 截图或拍摄要求，例如「投递看板，要能看到状态列，横版，不要有弹窗」。\n- 标出哪些点缀元素会由 AI 生成。\n- 出完素材清单后，把缺口一并放进第 6 步的方案里。只要还有空缺的主体素材位，就必须停下等用户补上真实截图或实拍图，不能出图。不要用文字卡片、图标组合或 AI 插画替代主体素材，也不要用模型编造界面截图或产品主体。\n\n## 第 5 步：视觉细节清单\n\n把要还原的细节一条条写成可以检查的条目，例如：\n\n- 标题白色内描边加深色外描边，整体略微倾斜。\n- 「HTML」用蓝色，「互动课件」用橙色。\n- 标签是描边胶囊形状，左侧带图标。\n- 三张卡片错落叠放，后排卡片倾斜约 -6°。\n\n这份清单同时就是第 8 步评委的评分依据。\n\n## 第 6 步：封面方案确认（必须等用户确认、并且主体素材补齐后才能出图）\n\n在出任何图之前，先把完整方案发给用户，然后停下。必须同时满足下面两点，才能进入第 7 步：用户明确说「可以」；所有主体素材位都已经有真实截图或实拍图。方案包括：\n\n- 对标拆成了哪几个格子，例如「标题两行、三个标签、三张卡片、一个 logo 位」。\n- 每个格子放什么：标题和标签的确切文字；哪张素材放哪个位置。\n- 文案改写说明：如果为了字数删改了用户原文，列出删了哪些字。\n- 素材建议与缺口：第 4 步给出的候选和推荐，以及还缺哪些素材。若有缺口，明确告诉用户：先按建议准备真图，补齐后再出图，不能用文字卡片、图标组合或 AI 插画替代。\n- 要删掉的元素，以及哪些点缀交给 AI 画。\n- 第 5 步的视觉细节清单。\n\n用户可以在这一步改文案、换素材位置、补素材。按用户意见修改方案，再次确认，并且主体素材都已补齐后，才开始出图。\n\n## 第 7 步：出图\n\n用你能调用的生图模型，比例必须是 3:4。\n\n- 图 1 固定放对标封面，提示词开头写「严格复刻图 1 的布局、配色、字体、标签和装饰，只替换文字和截图」。\n- 图 2 及之后的图按顺序放主体素材，并在提示词里写明每张图对应哪个素材位。\n- 提示词里还要写清楚：每一格要换成的确切文字、第 5 步的细节清单、要删掉的元素（例如「不要播放按钮」「不要人脸」「不要额外文字」）。\n- 每一轮至少出 2 张候选图。\n- 把每张候选和所用提示词存到你的工作目录。\n\n## 第 8 步：独立评委打分（≥ 8 分才能交付）\n\n另外开一个独立的 agent 或子任务当评委。评委只能看到三样东西：对标封面、成品、评分表和第 5 步的细节清单。不能让它看到生成用的提示词。能开子 agent 时，必须走独立评委。\n\n如果你不能开子 agent，就自己按评分表逐条严格自评，不能跳过打分。这是降级做法。若采用自评，交付时必须注明「这次是按评分表自评，不是独立评委」。\n\n评分满分 10 分，分 4 项（点击率不算评分项）：\n\n- 布局还原度：35%\n- 视觉细节还原：25%（按细节清单逐条核对）\n- 文字正确：20%\n- 主体素材还原度：20%（截图内容和位置对不对，有没有乱码）\n\n一票否决项，不管总分多少都不能交付：\n\n- 标题或标签有错字。\n- 出现人脸（不露脸模式下）。\n- 出现多余的文字或水印。\n- 素材放错位置。\n\n评委必须列出具体的扣分点，例如「左下卡片标题错写成『投试看板』」。\n\n低于 8 分或者命中否决项时，只针对扣分点修改，用编辑式提示词：「只改 X，其余保持完全一致」。然后重新评分。\n\n最多跑 3 轮。3 轮之后还不达标，就把最高分的那张和它的扣分点一起交给用户，说明没达标。\n\n每一轮的成品、分数和扣分点都要存到你的工作目录。\n\n## 第 9 步：存档与交付\n\n把每一轮的成品、分数和扣分点都存档，存到你的工作目录。\n\n交付时三样东西一起给：\n\n- 最终封面。\n- 风格说明卡。\n- 评分表（每一项的分数和扣分点）。\n\n如果对文案或素材做了删改，交付时一并说明。若第 8 步采用的是自评而不是独立评委，交付时必须注明「这次是按评分表自评，不是独立评委」。\n\n## 经验要点\n\n- 对标图要作为模板直接放进图 1，不要只当成「风格参考」，也不要用代码去拼版式。这是出图稳定的关键。\n- 先拆好格子再往里填，标题字数要和对标一致。\n- 细节要一条条点名写出来，不能只说「风格类似」。\n- AI 重画截图时，小字容易乱码，所以要多出几张候选，再挑最干净的。\n";
-  // --- END AGENT_PROMPT ---
 
   var state = {
     view: 'import',
@@ -2766,16 +2762,8 @@
   }
 
 
-  // ——— 导出提示词：对标封面原图 + 单张提示词长图 ———
-  var PROMPT_PAGE_W = 1170;
-  var PROMPT_MARGIN_X = 84;
-  var PROMPT_MARGIN_TOP = 88;
-  var PROMPT_MARGIN_BOTTOM = 88;
-  var PROMPT_TITLE_SIZE = 40;
-  var PROMPT_BODY_SIZE = 34;
-  var PROMPT_BODY_LH = Math.round(PROMPT_BODY_SIZE * 1.65);
-  var PROMPT_FONT_STACK = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", sans-serif';
-  var PROMPT_LINE_PUNCT = '，。、；：！？,.!?;:）)】》」』';
+  // ——— 导出提示词：对标封面原图 + 静态流程说明图（assets/prompt-flow-poster.png）———
+  var PROMPT_POSTER_URL = './assets/prompt-flow-poster.png?v=20261112a';
 
   var promptExport = {
     open: false,
@@ -3019,99 +3007,33 @@
     host.hidden = false;
   }
 
-  function wrapPromptParagraph(ctx, para, maxW) {
-    if (para === '') return [''];
-    var lines = [];
-    var cur = '';
-    for (var i = 0; i < para.length; i++) {
-      var ch = para[i];
-      var overflow = ctx.measureText(cur + ch).width > maxW && cur;
-      if (overflow && PROMPT_LINE_PUNCT.indexOf(ch) >= 0) {
-        cur += ch;
-        continue;
-      }
-      if (overflow) {
-        lines.push(cur);
-        cur = ch;
-      } else {
-        cur += ch;
-      }
-    }
-    if (cur !== '') lines.push(cur);
-    return lines.length ? lines : [''];
+  /** 读 blob 前 24 字节（PNG 签名 + IHDR），宽高在 offset 16/20 的 uint32 BE。 */
+  function readPngIhdrSize(blob) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onload = function () {
+        var buf = new DataView(r.result);
+        if (buf.byteLength < 24 ||
+            buf.getUint32(0) !== 0x89504E47 || buf.getUint32(4) !== 0x0D0A1A0A) {
+          reject(new Error('not png'));
+          return;
+        }
+        resolve({ w: buf.getUint32(16), h: buf.getUint32(20) });
+      };
+      r.onerror = function () { reject(new Error('read failed')); };
+      r.readAsArrayBuffer(blob.slice(0, 24));
+    });
   }
 
-  function isPromptHeading(line) {
-    return /^#{1,3}\s/.test(line);
-  }
-
-  function layoutPromptPage(text) {
-    var measure = document.createElement('canvas').getContext('2d');
-    var maxW = PROMPT_PAGE_W - PROMPT_MARGIN_X * 2;
-    var paragraphs = text.split('\n');
-    var items = [];
-    paragraphs.forEach(function (para, idx) {
-      var heading = isPromptHeading(para);
-      measure.font = (heading ? '650 ' + PROMPT_TITLE_SIZE : '400 ' + PROMPT_BODY_SIZE) + 'px ' + PROMPT_FONT_STACK;
-      var wrapped = wrapPromptParagraph(measure, para, maxW);
-      wrapped.forEach(function (ln, j) {
-        items.push({
-          text: ln,
-          heading: heading,
-          breakBefore: idx > 0 && j === 0 && para !== '' && isPromptHeading(para)
-        });
+  /** 加载静态流程说明图：直接取原 PNG blob 导出，不做二次栅格化。 */
+  function loadPromptPoster() {
+    return fetch(PROMPT_POSTER_URL).then(function (res) {
+      if (!res.ok) throw new Error('poster fetch failed: ' + res.status);
+      return res.blob();
+    }).then(function (blob) {
+      return readPngIhdrSize(blob).then(function (size) {
+        return { blob: blob, w: size.w, h: size.h };
       });
-    });
-
-    var headerH = 72;
-    var totalBody = 0;
-    items.forEach(function (it, i) {
-      if (it.breakBefore && i > 0) totalBody += Math.round(PROMPT_BODY_LH * 0.35);
-      totalBody += it.heading ? PROMPT_TITLE_SIZE + 18 : PROMPT_BODY_LH;
-    });
-    var height = Math.max(PROMPT_MARGIN_TOP + headerH + totalBody + PROMPT_MARGIN_BOTTOM, 1600);
-
-    var cv = document.createElement('canvas');
-    cv.width = PROMPT_PAGE_W;
-    cv.height = height;
-    var ctx = cv.getContext('2d');
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, PROMPT_PAGE_W, height);
-    ctx.fillStyle = '#1a1a1a';
-    ctx.font = '650 ' + PROMPT_TITLE_SIZE + 'px ' + PROMPT_FONT_STACK;
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText('对标封面复刻 · Agent 提示词', PROMPT_MARGIN_X, PROMPT_MARGIN_TOP);
-    ctx.strokeStyle = 'rgba(26,26,26,0.14)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(PROMPT_MARGIN_X, PROMPT_MARGIN_TOP + 24);
-    ctx.lineTo(PROMPT_PAGE_W - PROMPT_MARGIN_X, PROMPT_MARGIN_TOP + 24);
-    ctx.stroke();
-
-    var y = PROMPT_MARGIN_TOP + headerH;
-    items.forEach(function (it, i) {
-      if (it.breakBefore && i > 0) y += Math.round(PROMPT_BODY_LH * 0.35);
-      ctx.fillStyle = '#1a1a1a';
-      ctx.textBaseline = 'alphabetic';
-      if (it.heading) {
-        ctx.font = '650 ' + PROMPT_TITLE_SIZE + 'px ' + PROMPT_FONT_STACK;
-        if (it.text) ctx.fillText(it.text, PROMPT_MARGIN_X, y);
-        y += PROMPT_TITLE_SIZE + 18;
-      } else {
-        ctx.font = '400 ' + PROMPT_BODY_SIZE + 'px ' + PROMPT_FONT_STACK;
-        if (it.text) ctx.fillText(it.text, PROMPT_MARGIN_X, y);
-        y += PROMPT_BODY_LH;
-      }
-    });
-    return cv;
-  }
-
-  function renderPromptCanvas() {
-    var ready = (document.fonts && document.fonts.ready)
-      ? document.fonts.ready.catch(function () {})
-      : Promise.resolve();
-    return ready.then(function () {
-      return layoutPromptPage(AGENT_PROMPT);
     });
   }
 
@@ -3198,22 +3120,18 @@
       hidePromptSwatches();
     });
 
-    renderPromptCanvas().then(function (cv) {
-      return canvasToBlob(cv, 'image/png').then(function (blob) {
-        return { cv: cv, blob: blob };
-      });
-    }).then(function (res) {
+    loadPromptPoster().then(function (poster) {
       if (!promptExport.open) return;
-      if (!res || !res.blob) {
-        if (el.promptSave) el.promptSave.textContent = '生成失败';
-        return;
-      }
-      promptExport.promptBlob = res.blob;
-      promptExport.promptUrl = URL.createObjectURL(res.blob);
-      promptExport.promptSize = { w: res.cv.width, h: res.cv.height };
+      promptExport.promptBlob = poster.blob;
+      promptExport.promptUrl = URL.createObjectURL(poster.blob);
+      promptExport.promptSize = { w: poster.w, h: poster.h };
       if (el.promptSave) el.promptSave.disabled = false;
     }).catch(function () {
-      if (el.promptSave) el.promptSave.textContent = '生成失败';
+      if (!promptExport.open) return;
+      if (el.promptSave) {
+        el.promptSave.textContent = '生成失败';
+        el.promptSave.disabled = true;
+      }
     });
   }
 
