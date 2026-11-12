@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta http-equiv="Cache-Control" content="no-cache" />
   <title>封面灵感收集</title>
-  <link rel="stylesheet" href="./styles.css?v=20261112a" />
+  <link rel="stylesheet" href="./styles.css?v=20261112b" />
 </head>
 <body>
   <nav class="tabs" id="tabs" aria-label="主导航" hidden>
@@ -157,20 +157,25 @@
 
   <div id="prompt-sheet" class="prompt-sheet" hidden>
     <button type="button" id="prompt-sheet-backdrop" class="prompt-sheet__backdrop" aria-label="关闭"></button>
-    <div class="prompt-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="prompt-sheet-title">
+    <div class="prompt-sheet__panel" id="prompt-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="prompt-sheet-title">
       <div class="prompt-sheet__handle" aria-hidden="true"></div>
       <button type="button" id="prompt-sheet-close" class="prompt-sheet__close" aria-label="关闭">×</button>
       <div class="prompt-sheet__top">
-        <div class="prompt-sheet__cover" id="prompt-sheet-cover"></div>
+        <div class="prompt-sheet__thumbs" id="prompt-sheet-thumbs">
+          <div class="prompt-sheet__cover" id="prompt-sheet-cover"></div>
+          <div class="prompt-sheet__cover prompt-sheet__cover--slot" id="prompt-sheet-poster"></div>
+        </div>
         <div class="prompt-sheet__title" id="prompt-sheet-title">导出</div>
       </div>
       <div class="prompt-sheet__swatches" id="prompt-sheet-swatches" hidden></div>
       <div id="prompt-sheet-main">
+        <p class="prompt-sheet__hint">将保存两张图：对标封面、提示词</p>
         <button type="button" id="prompt-sheet-save" class="prompt-sheet__save">保存</button>
       </div>
       <div id="prompt-sheet-done" hidden>
         <ul class="prompt-sheet__list" id="prompt-sheet-list"></ul>
-        <button type="button" id="prompt-sheet-done-btn" class="prompt-sheet__save">已保存</button>
+        <p class="prompt-sheet__hint">把这两张一起发给你的 Agent 就可以</p>
+        <button type="button" id="prompt-sheet-done-btn" class="prompt-sheet__save">好的</button>
       </div>
     </div>
   </div>
@@ -242,6 +247,6 @@
     </svg>
     已收入灵感库
   </div>
-  <script src="./app.js?v=20261112a"></script>
+  <script src="./app.js?v=20261112b"></script>
 </body>
 </html>
